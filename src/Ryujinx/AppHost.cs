@@ -250,46 +250,68 @@ namespace Ryujinx.Ava
         // }
 
         // Add this callback method to handle incoming HTTP requests
-        private void ListenerCallback(IAsyncResult result)
+        private async void ListenerCallback(IAsyncResult result)
         {
             HttpListener listener = (HttpListener)result.AsyncState;
-            // Call EndGetContext to complete the asynchronous operation
-            HttpListenerContext context = listener.EndGetContext(result);
-            HttpListenerRequest request = context.Request;
-            // Obtain a response object
-            HttpListenerResponse response = context.Response;
-            // Construct a response.
-            string responseString;
-            byte[] buffer;
+            HttpListenerContext context = null;
 
-            // capture scree using renderer and save in _image variable
-            _renderer.Screenshot();
-
-            lock (_imageLock)
+            try
             {
-                if (_image != null)
-                {
-                    using (var ms = new MemoryStream())
-                    {
-                        _image.SaveAsJpeg(ms, new JpegEncoder { Quality = 75 });
-                        buffer = ms.ToArray();
-                        response.ContentType = "image/jpeg";
-                    }
-                }
-                else
-                {
-                    responseString = "<HTML><BODY> No image available.</BODY></HTML>";
-                    buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                    response.ContentType = "text/html";
-                }
+                context = listener.EndGetContext(result);
+            }
+            catch (Exception ex)
+            {
+                // Log exception or handle listener shutdown
+                return;
             }
 
-            // Get a response stream and write the response to it.
-            response.ContentLength64 = buffer.Length;
-            System.IO.Stream output = response.OutputStream;
-            output.Write(buffer, 0, buffer.Length);
-            // You must close the output stream.
-            output.Close();
+            HttpListenerRequest request = context.Request;
+            HttpListenerResponse response = context.Response;
+
+            try
+            {
+                byte[] buffer;
+
+                // Capture screen using renderer and save in _image variable
+                _renderer.Screenshot();
+
+                lock (_imageLock)
+                {
+                    if (_image != null)
+                    {
+                        using (var ms = new MemoryStream())
+                        {
+                            _image.SaveAsJpeg(
+                                ms,
+                                new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 75 }
+                            );
+                            buffer = ms.ToArray();
+                            response.ContentType = "image/jpeg";
+                        }
+                    }
+                    else
+                    {
+                        string responseString = "<HTML><BODY> No image available.</BODY></HTML>";
+                        buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                        response.ContentType = "text/html";
+                    }
+                }
+
+                response.ContentLength64 = buffer.Length;
+                using (System.IO.Stream output = response.OutputStream)
+                {
+                    await output.WriteAsync(buffer, 0, buffer.Length);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Handle errors (e.g., client disconnected, etc.)
+            }
+            finally
+            {
+                response.Close();
+            }
+
             listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
         }
 
