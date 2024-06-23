@@ -271,31 +271,51 @@ namespace Ryujinx.Ava
 
             try
             {
-                byte[] buffer;
+                byte[] buffer = Array.Empty<byte>();
+                string responseString = string.Empty; // Declare once outside the if-else blocks
 
-                // Capture screen using renderer and save in _image variable
-                // _renderer.Screenshot();
-
-                lock (_imageLock)
+                string requestUrl = request.Url.AbsolutePath;
+                switch (requestUrl)
                 {
-                    if (_image != null)
-                    {
-                        using (var ms = new MemoryStream())
+                    case "/pause":
+                        Pause();
+                        break;
+
+                    case "/resume":
+                        Resume();
+                        break;
+
+                    case "/screenshot":
+                        lock (_imageLock)
                         {
-                            _image.SaveAsJpeg(
-                                ms,
-                                new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 75 }
-                            );
-                            buffer = ms.ToArray();
-                            response.ContentType = "image/jpeg";
+                            if (_image != null)
+                            {
+                                using (var ms = new MemoryStream())
+                                {
+                                    _image.SaveAsJpeg(
+                                        ms,
+                                        new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder
+                                        {
+                                            Quality = 75
+                                        }
+                                    );
+                                    buffer = ms.ToArray();
+                                    response.ContentType = "image/jpeg";
+                                }
+                            }
+                            else
+                            {
+                                responseString = "<HTML><BODY> No image available.</BODY></HTML>";
+                                buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                                response.ContentType = "text/html";
+                            }
                         }
-                    }
-                    else
-                    {
-                        string responseString = "<HTML><BODY> No image available.</BODY></HTML>";
+                        break;
+                    default:
+                        responseString = "<HTML><BODY>Invalid request.</BODY></HTML>";
                         buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
                         response.ContentType = "text/html";
-                    }
+                        break;
                 }
 
                 response.ContentLength64 = buffer.Length;
