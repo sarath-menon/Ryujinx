@@ -281,6 +281,9 @@ namespace Ryujinx.Ava
             string responseString;
             byte[] buffer;
 
+            // capture scree using renderer and save in _image variable
+            _renderer.Screenshot();
+
             lock (_imageLock)
             {
                 if (_image != null)
@@ -520,6 +523,102 @@ namespace Ryujinx.Ava
                                 path,
                                 new PngEncoder { ColorType = PngColorType.Rgb, }
                             );
+
+                            // // Dispose of the image to free resources
+                            // _image.Dispose();
+
+                            // Log a notice that the screenshot was saved successfully
+                            Logger.Notice.Print(
+                                LogClass.Application,
+                                $"Screenshot saved to {path}",
+                                "Screenshot"
+                            );
+                        }
+                    }
+                });
+            }
+            else
+            {
+                // Log an error if the screenshot data is empty or invalid
+                Logger.Error?.Print(
+                    LogClass.Application,
+                    $"Screenshot is empty. Size : {e.Data.Length} bytes. Resolution : {e.Width}x{e.Height}",
+                    "Screenshot"
+                );
+            }
+        }
+
+        private void Renderer_ScreenCapturedNoSave(object sender, ScreenCaptureImageInfo e)
+        {
+            // Check if the captured screen data is valid
+            if (e.Data.Length > 0 && e.Height > 0 && e.Width > 0)
+            {
+                // Run the screen capture processing in a separate task
+                Task.Run(() =>
+                {
+                    lock (_lockObject)
+                    {
+                        // Get the active application name and sanitize it for file naming
+                        string applicationName = Device.Processes.ActiveApplication.Name;
+                        string sanitizedApplicationName = FileSystemUtils.SanitizeFileName(
+                            applicationName
+                        );
+                        DateTime currentTime = DateTime.Now;
+
+                        // Create a filename for the screenshot
+                        string filename =
+                            $"{sanitizedApplicationName}_{currentTime.Year}-{currentTime.Month:D2}-{currentTime.Day:D2}_{currentTime.Hour:D2}-{currentTime.Minute:D2}-{currentTime.Second:D2}.png";
+
+                        // Determine the directory to save the screenshot based on the launch mode
+                        string directory = AppDataManager.Mode switch
+                        {
+                            AppDataManager.LaunchMode.Portable
+                            or AppDataManager.LaunchMode.Custom
+                                => Path.Combine(AppDataManager.BaseDirPath, "screenshots"),
+                            _
+                                => Path.Combine(
+                                    Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                                    "Ryujinx"
+                                ),
+                        };
+
+                        string path = Path.Combine(directory, filename);
+
+                        try
+                        {
+                            // Create the directory if it doesn't exist
+                            Directory.CreateDirectory(directory);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log an error if the directory creation fails
+                            Logger.Error?.Print(
+                                LogClass.Application,
+                                $"Failed to create directory at path {directory}. Error : {ex.GetType().Name}",
+                                "Screenshot"
+                            );
+
+                            return;
+                        }
+
+                        lock (_imageLock)
+                        {
+                            // Load the image data
+                            _image = e.IsBgra
+                                ? Image.LoadPixelData<Bgra32>(e.Data, e.Width, e.Height)
+                                : Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height);
+
+                            // Apply horizontal flip if needed
+                            if (e.FlipX)
+                            {
+                                _image.Mutate(x => x.Flip(FlipMode.Horizontal));
+                            }
+
+                            // Apply vertical flip if needed
+                            if (e.FlipY)
+                            {
+                                _image.Mutate(x => x.Flip(FlipMode.Vertical));
+                            }
 
                             // // Dispose of the image to free resources
                             // _image.Dispose();
@@ -1240,7 +1339,7 @@ namespace Ryujinx.Ava
                 : Device.Gpu.Renderer;
 
             // Subscribe to screen capture event (attach event handler ScreenCaptured event)
-            _renderer.ScreenCaptured += Renderer_ScreenCaptured;
+            _renderer.ScreenCaptured += Renderer_ScreenCapturedNoSave;
 
             // Initialize background context for OpenGL
             (RendererHost.EmbeddedWindow as EmbeddedWindowOpenGL)?.InitializeBackgroundContext(
