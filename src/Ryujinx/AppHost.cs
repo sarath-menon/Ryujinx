@@ -71,6 +71,7 @@ namespace Ryujinx.Ava
         // for http server
         private HttpListener _httpListener;
         private System.Timers.Timer _messageTimer;
+        private Image _image; // for screen capture
 
         private const int CursorHideIdleTime = 5; // Hide Cursor seconds.
         private const float MaxResolutionScale = 4.0f; // Max resolution hotkeys can scale to before wrapping.
@@ -402,21 +403,26 @@ namespace Ryujinx.Ava
 
         private void Renderer_ScreenCaptured(object sender, ScreenCaptureImageInfo e)
         {
+            // Check if the captured screen data is valid
             if (e.Data.Length > 0 && e.Height > 0 && e.Width > 0)
             {
+                // Run the screen capture processing in a separate task
                 Task.Run(() =>
                 {
                     lock (_lockObject)
                     {
+                        // Get the active application name and sanitize it for file naming
                         string applicationName = Device.Processes.ActiveApplication.Name;
                         string sanitizedApplicationName = FileSystemUtils.SanitizeFileName(
                             applicationName
                         );
                         DateTime currentTime = DateTime.Now;
 
+                        // Create a filename for the screenshot
                         string filename =
                             $"{sanitizedApplicationName}_{currentTime.Year}-{currentTime.Month:D2}-{currentTime.Day:D2}_{currentTime.Hour:D2}-{currentTime.Minute:D2}-{currentTime.Second:D2}.png";
 
+                        // Determine the directory to save the screenshot based on the launch mode
                         string directory = AppDataManager.Mode switch
                         {
                             AppDataManager.LaunchMode.Portable
@@ -433,10 +439,12 @@ namespace Ryujinx.Ava
 
                         try
                         {
+                            // Create the directory if it doesn't exist
                             Directory.CreateDirectory(directory);
                         }
                         catch (Exception ex)
                         {
+                            // Log an error if the directory creation fails
                             Logger.Error?.Print(
                                 LogClass.Application,
                                 $"Failed to create directory at path {directory}. Error : {ex.GetType().Name}",
@@ -446,24 +454,30 @@ namespace Ryujinx.Ava
                             return;
                         }
 
-                        Image image = e.IsBgra
+                        // Load the image data
+                        _image = e.IsBgra
                             ? Image.LoadPixelData<Bgra32>(e.Data, e.Width, e.Height)
                             : Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height);
 
+                        // Apply horizontal flip if needed
                         if (e.FlipX)
                         {
-                            image.Mutate(x => x.Flip(FlipMode.Horizontal));
+                            _image.Mutate(x => x.Flip(FlipMode.Horizontal));
                         }
 
+                        // Apply vertical flip if needed
                         if (e.FlipY)
                         {
-                            image.Mutate(x => x.Flip(FlipMode.Vertical));
+                            _image.Mutate(x => x.Flip(FlipMode.Vertical));
                         }
 
-                        image.SaveAsPng(path, new PngEncoder { ColorType = PngColorType.Rgb, });
+                        // Save the image as a PNG file
+                        _image.SaveAsPng(path, new PngEncoder { ColorType = PngColorType.Rgb, });
 
-                        image.Dispose();
+                        // Dispose of the image to free resources
+                        _image.Dispose();
 
+                        // Log a notice that the screenshot was saved successfully
                         Logger.Notice.Print(
                             LogClass.Application,
                             $"Screenshot saved to {path}",
@@ -474,6 +488,7 @@ namespace Ryujinx.Ava
             }
             else
             {
+                // Log an error if the screenshot data is empty or invalid
                 Logger.Error?.Print(
                     LogClass.Application,
                     $"Screenshot is empty. Size : {e.Data.Length} bytes. Resolution : {e.Width}x{e.Height}",
@@ -1176,7 +1191,7 @@ namespace Ryujinx.Ava
                 ? tr.BaseRenderer
                 : Device.Gpu.Renderer;
 
-            // Subscribe to screen capture event
+            // Subscribe to screen capture event (attach event handler ScreenCaptured event)
             _renderer.ScreenCaptured += Renderer_ScreenCaptured;
 
             // Initialize background context for OpenGL
