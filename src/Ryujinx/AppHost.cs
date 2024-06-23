@@ -247,6 +247,27 @@ namespace Ryujinx.Ava
             // Here you can implement the logic to send messages to connected clients
         }
 
+        // // Add this callback method to handle incoming HTTP requests
+        // private void ListenerCallback(IAsyncResult result)
+        // {
+        //     HttpListener listener = (HttpListener)result.AsyncState;
+        //     // Call EndGetContext to complete the asynchronous operation
+        //     HttpListenerContext context = listener.EndGetContext(result);
+        //     HttpListenerRequest request = context.Request;
+        //     // Obtain a response object
+        //     HttpListenerResponse response = context.Response;
+        //     // Construct a response.
+        //     string responseString = "<HTML><BODY> Hello world!</BODY></HTML>";
+        //     byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+        //     // Get a response stream and write the response to it.
+        //     response.ContentLength64 = buffer.Length;
+        //     System.IO.Stream output = response.OutputStream;
+        //     output.Write(buffer, 0, buffer.Length);
+        //     // You must close the output stream.
+        //     output.Close();
+        //     listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
+        // }
+
         // Add this callback method to handle incoming HTTP requests
         private void ListenerCallback(IAsyncResult result)
         {
@@ -257,8 +278,28 @@ namespace Ryujinx.Ava
             // Obtain a response object
             HttpListenerResponse response = context.Response;
             // Construct a response.
-            string responseString = "<HTML><BODY> Hello world!</BODY></HTML>";
-            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+            string responseString;
+            byte[] buffer;
+
+            lock (_imageLock)
+            {
+                if (_image != null)
+                {
+                    using (var ms = new MemoryStream())
+                    {
+                        _image.SaveAsPng(ms);
+                        buffer = ms.ToArray();
+                        response.ContentType = "image/png";
+                    }
+                }
+                else
+                {
+                    responseString = "<HTML><BODY> No image available.</BODY></HTML>";
+                    buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                    response.ContentType = "text/html";
+                }
+            }
+
             // Get a response stream and write the response to it.
             response.ContentLength64 = buffer.Length;
             System.IO.Stream output = response.OutputStream;
@@ -480,8 +521,8 @@ namespace Ryujinx.Ava
                                 new PngEncoder { ColorType = PngColorType.Rgb, }
                             );
 
-                            // Dispose of the image to free resources
-                            _image.Dispose();
+                            // // Dispose of the image to free resources
+                            // _image.Dispose();
 
                             // Log a notice that the screenshot was saved successfully
                             Logger.Notice.Print(
