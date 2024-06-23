@@ -44,6 +44,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" /> <!-- New row for the TextBox -->
         </Grid.RowDefinitions>
         <helpers:OffscreenTextBox Name="HiddenTextBox" Grid.Row="0" />
         <Grid
@@ -201,5 +202,12 @@
                 Name="StatusBarView"
                 Grid.Row="2" />
         </Grid>
+        <!-- <TextBox
+            Grid.Row="2"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Center"
+            Margin="10"
+            Padding="5"
+            Text="{Binding TextBoxContent}" /> -->
     </Grid>
 </window:StyleableWindow>
