@@ -12,6 +12,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Threading;
 using LibHac.Tools.FsSystem;
+using Newtonsoft.Json;
 using Ryujinx.Audio.Backends.Dummy;
 using Ryujinx.Audio.Backends.OpenAL;
 using Ryujinx.Audio.Backends.SDL2;
@@ -283,6 +284,43 @@ namespace Ryujinx.Ava
 
                     case "/resume":
                         Resume();
+                        break;
+
+                    case "/control":
+                        using (
+                            var reader = new StreamReader(
+                                request.InputStream,
+                                request.ContentEncoding
+                            )
+                        )
+                        {
+                            var requestBody = await reader.ReadToEndAsync();
+                            var requestData = JsonConvert.DeserializeObject<
+                                Dictionary<string, string>
+                            >(requestBody);
+                            var key = requestData["key"];
+                            Key avaKey = Key.Unknown;
+
+                            if (key == "W")
+                            {
+                                avaKey = Key.W;
+                            }
+                            else if (key == "A")
+                            {
+                                avaKey = Key.A;
+                            }
+                            else if (key == "S")
+                            {
+                                avaKey = Key.S;
+                            }
+                            else if (key == "D")
+                            {
+                                avaKey = Key.D;
+                            }
+
+                            var duration = requestData["duration"];
+                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
+                        }
                         break;
 
                     case "/screenshot":
@@ -1334,7 +1372,7 @@ namespace Ryujinx.Ava
         {
             int counter = 0;
             const int pauseAfterSteps = 100;
-            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(Key.W);
+            // (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(Key.W);
 
             while (_isActive)
             {
