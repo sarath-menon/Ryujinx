@@ -49,6 +49,7 @@ using Ryujinx.UI.Common.Configuration;
 using Ryujinx.UI.Common.Helper;
 using Silk.NET.Vulkan;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -290,9 +291,9 @@ namespace Ryujinx.Ava
                 {
                     using (var ms = new MemoryStream())
                     {
-                        _image.SaveAsPng(ms);
+                        _image.SaveAsJpeg(ms, new JpegEncoder { Quality = 75 });
                         buffer = ms.ToArray();
-                        response.ContentType = "image/png";
+                        response.ContentType = "image/jpeg";
                     }
                 }
                 else
