@@ -71,7 +71,8 @@ namespace Ryujinx.Ava
     {
         // for http server
         private HttpListener _httpListener;
-        private System.Timers.Timer _messageTimer;
+
+        // private System.Timers.Timer _messageTimer;
         private Image _image; // for screen capture
 
         private const int CursorHideIdleTime = 5; // Hide Cursor seconds.
@@ -235,38 +236,17 @@ namespace Ryujinx.Ava
 
             _httpListener.BeginGetContext(new AsyncCallback(ListenerCallback), _httpListener);
 
-            _messageTimer = new System.Timers.Timer(1000); // Use full namespace here
-            _messageTimer.Elapsed += OnTimedEvent;
-            _messageTimer.AutoReset = true;
-            _messageTimer.Enabled = true;
+            // _messageTimer = new System.Timers.Timer(1000); // Use full namespace here
+            // _messageTimer.Elapsed += OnTimedEvent;
+            // _messageTimer.AutoReset = true;
+            // _messageTimer.Enabled = true;
         }
 
-        // Add this method to handle the timer event
-        private void OnTimedEvent(Object source, ElapsedEventArgs e)
-        {
-            Console.WriteLine("Publishing empty message...");
-            // Here you can implement the logic to send messages to connected clients
-        }
-
-        // // Add this callback method to handle incoming HTTP requests
-        // private void ListenerCallback(IAsyncResult result)
+        // // Add this method to handle the timer event
+        // private void OnTimedEvent(Object source, ElapsedEventArgs e)
         // {
-        //     HttpListener listener = (HttpListener)result.AsyncState;
-        //     // Call EndGetContext to complete the asynchronous operation
-        //     HttpListenerContext context = listener.EndGetContext(result);
-        //     HttpListenerRequest request = context.Request;
-        //     // Obtain a response object
-        //     HttpListenerResponse response = context.Response;
-        //     // Construct a response.
-        //     string responseString = "<HTML><BODY> Hello world!</BODY></HTML>";
-        //     byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-        //     // Get a response stream and write the response to it.
-        //     response.ContentLength64 = buffer.Length;
-        //     System.IO.Stream output = response.OutputStream;
-        //     output.Write(buffer, 0, buffer.Length);
-        //     // You must close the output stream.
-        //     output.Close();
-        //     listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
+        //     Console.WriteLine("Publishing empty message...");
+        //     // Here you can implement the logic to send messages to connected clients
         // }
 
         // Add this callback method to handle incoming HTTP requests
@@ -821,11 +801,11 @@ namespace Ryujinx.Ava
                 _httpListener.Stop();
                 _httpListener.Close();
             }
-            if (_messageTimer != null)
-            {
-                _messageTimer.Stop();
-                _messageTimer.Dispose();
-            }
+            // if (_messageTimer != null)
+            // {
+            //     _messageTimer.Stop();
+            //     _messageTimer.Dispose();
+            // }
         }
 
         public void DisposeGpu()
