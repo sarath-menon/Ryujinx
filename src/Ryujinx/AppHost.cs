@@ -257,6 +257,7 @@ namespace Ryujinx.Ava
 
             try
             {
+                // Retrieve the context of the incoming HTTP request
                 context = listener.EndGetContext(result);
             }
             catch (Exception ex)
@@ -273,7 +274,7 @@ namespace Ryujinx.Ava
                 byte[] buffer;
 
                 // Capture screen using renderer and save in _image variable
-                _renderer.Screenshot();
+                // _renderer.Screenshot();
 
                 lock (_imageLock)
                 {
@@ -1311,12 +1312,23 @@ namespace Ryujinx.Ava
 
         private void MainLoop()
         {
+            int counter = 0;
+            const int pauseAfterSteps = 100;
+
             while (_isActive)
             {
                 UpdateFrame();
+                counter++;
 
                 // Polling becomes expensive if it's not slept.
                 Thread.Sleep(1);
+
+                // Pause after running 100 steps
+                if (counter == pauseAfterSteps)
+                {
+                    _renderer.Screenshot();
+                    counter = 0; // Reset counter
+                }
             }
         }
 
