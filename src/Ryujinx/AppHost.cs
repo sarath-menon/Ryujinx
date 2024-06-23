@@ -318,8 +318,11 @@ namespace Ryujinx.Ava
                                 avaKey = Key.D;
                             }
 
-                            var duration = requestData["duration"];
+                            // keypress
+                            int duration = int.Parse(requestData["duration"]);
                             (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
+                            Thread.Sleep(duration);
+                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
                         }
                         break;
 
