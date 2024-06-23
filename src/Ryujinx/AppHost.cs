@@ -951,6 +951,7 @@ namespace Ryujinx.Ava
 
         private void RenderLoop()
         {
+            // Invoke UI thread to set fullscreen and menu/status bar visibility
             Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_viewModel.StartGamesInFullscreen)
@@ -964,39 +965,49 @@ namespace Ryujinx.Ava
                 }
             });
 
+            // Initialize renderer
             _renderer = Device.Gpu.Renderer is ThreadedRenderer tr ? tr.BaseRenderer : Device.Gpu.Renderer;
 
+            // Subscribe to screen capture event
             _renderer.ScreenCaptured += Renderer_ScreenCaptured;
 
+            // Initialize background context for OpenGL
             (RendererHost.EmbeddedWindow as EmbeddedWindowOpenGL)?.InitializeBackgroundContext(_renderer);
 
+            // Initialize GPU renderer
             Device.Gpu.Renderer.Initialize(_glLogLevel);
 
+            // Set renderer window properties
             _renderer?.Window?.SetAntiAliasing((Graphics.GAL.AntiAliasing)ConfigurationState.Instance.Graphics.AntiAliasing.Value);
             _renderer?.Window?.SetScalingFilter((Graphics.GAL.ScalingFilter)ConfigurationState.Instance.Graphics.ScalingFilter.Value);
             _renderer?.Window?.SetScalingFilterLevel(ConfigurationState.Instance.Graphics.ScalingFilterLevel.Value);
             _renderer?.Window?.SetColorSpacePassthrough(ConfigurationState.Instance.Graphics.EnableColorSpacePassthrough.Value);
 
+            // Set renderer window size
             Width = (int)RendererHost.Bounds.Width;
             Height = (int)RendererHost.Bounds.Height;
-
             _renderer.Window.SetSize((int)(Width * _topLevel.RenderScaling), (int)(Height * _topLevel.RenderScaling));
 
+            // Start the stopwatch for frame timing
             _chrono.Start();
 
+            // Run the GPU renderer loop
             Device.Gpu.Renderer.RunLoop(() =>
             {
+                // Set GPU thread and initialize shader cache
                 Device.Gpu.SetGpuThread();
                 Device.Gpu.InitializeShaderCache(_gpuCancellationTokenSource.Token);
 
+                // Change VSync mode
                 _renderer.Window.ChangeVSyncMode(Device.EnableDeviceVsync);
 
+                // Main rendering loop
                 while (_isActive)
                 {
                     _ticks += _chrono.ElapsedTicks;
-
                     _chrono.Restart();
 
+                    // Process frame if FIFO is ready
                     if (Device.WaitFifo())
                     {
                         Device.Statistics.RecordFifoStart();
@@ -1004,6 +1015,7 @@ namespace Ryujinx.Ava
                         Device.Statistics.RecordFifoEnd();
                     }
 
+                    // Present frame if available
                     while (Device.ConsumeFrameAvailable())
                     {
                         if (!_renderingStarted)
@@ -1016,21 +1028,24 @@ namespace Ryujinx.Ava
                         Device.PresentFrame(() => (RendererHost.EmbeddedWindow as EmbeddedWindowOpenGL)?.SwapBuffers());
                     }
 
+                    // Update status if enough ticks have passed
                     if (_ticks >= _ticksPerFrame)
                     {
                         UpdateStatus();
                     }
                 }
 
-                // Make sure all commands in the run loop are fully executed before leaving the loop.
+                // Flush threaded commands if using threaded renderer
                 if (Device.Gpu.Renderer is ThreadedRenderer threaded)
                 {
                     threaded.FlushThreadedCommands();
                 }
 
+                // Signal that GPU is done
                 _gpuDoneEvent.Set();
             });
 
+            // Make the OpenGL context current
             (RendererHost.EmbeddedWindow as EmbeddedWindowOpenGL)?.MakeCurrent(true);
         }
 
