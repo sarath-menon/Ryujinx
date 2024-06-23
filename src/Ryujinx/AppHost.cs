@@ -129,6 +129,7 @@ namespace Ryujinx.Ava
         private readonly bool _isFirmwareTitle;
 
         private readonly object _lockObject = new();
+        private readonly object _imageLock = new();
 
         public event EventHandler AppExit;
         public event EventHandler<StatusInitEventArgs> StatusInitEvent;
@@ -454,35 +455,41 @@ namespace Ryujinx.Ava
                             return;
                         }
 
-                        // Load the image data
-                        _image = e.IsBgra
-                            ? Image.LoadPixelData<Bgra32>(e.Data, e.Width, e.Height)
-                            : Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height);
-
-                        // Apply horizontal flip if needed
-                        if (e.FlipX)
+                        lock (_imageLock)
                         {
-                            _image.Mutate(x => x.Flip(FlipMode.Horizontal));
+                            // Load the image data
+                            _image = e.IsBgra
+                                ? Image.LoadPixelData<Bgra32>(e.Data, e.Width, e.Height)
+                                : Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height);
+
+                            // Apply horizontal flip if needed
+                            if (e.FlipX)
+                            {
+                                _image.Mutate(x => x.Flip(FlipMode.Horizontal));
+                            }
+
+                            // Apply vertical flip if needed
+                            if (e.FlipY)
+                            {
+                                _image.Mutate(x => x.Flip(FlipMode.Vertical));
+                            }
+
+                            // Save the image as a PNG file
+                            _image.SaveAsPng(
+                                path,
+                                new PngEncoder { ColorType = PngColorType.Rgb, }
+                            );
+
+                            // Dispose of the image to free resources
+                            _image.Dispose();
+
+                            // Log a notice that the screenshot was saved successfully
+                            Logger.Notice.Print(
+                                LogClass.Application,
+                                $"Screenshot saved to {path}",
+                                "Screenshot"
+                            );
                         }
-
-                        // Apply vertical flip if needed
-                        if (e.FlipY)
-                        {
-                            _image.Mutate(x => x.Flip(FlipMode.Vertical));
-                        }
-
-                        // Save the image as a PNG file
-                        _image.SaveAsPng(path, new PngEncoder { ColorType = PngColorType.Rgb, });
-
-                        // Dispose of the image to free resources
-                        _image.Dispose();
-
-                        // Log a notice that the screenshot was saved successfully
-                        Logger.Notice.Print(
-                            LogClass.Application,
-                            $"Screenshot saved to {path}",
-                            "Screenshot"
-                        );
                     }
                 });
             }
