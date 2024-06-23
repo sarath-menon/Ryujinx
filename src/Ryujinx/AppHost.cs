@@ -1334,6 +1334,7 @@ namespace Ryujinx.Ava
         {
             int counter = 0;
             const int pauseAfterSteps = 100;
+            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(Key.W);
 
             while (_isActive)
             {

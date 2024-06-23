@@ -1,9 +1,9 @@
+using System;
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Input;
-using System;
-using System.Collections.Generic;
 using AvaKey = Avalonia.Input.Key;
 using Key = Ryujinx.Input.Key;
 
@@ -56,7 +56,11 @@ namespace Ryujinx.Ava.Input
                 return null;
             }
 
-            return new AvaloniaKeyboard(this, _keyboardIdentifers[0], LocaleManager.Instance[LocaleKeys.AllKeyboards]);
+            return new AvaloniaKeyboard(
+                this,
+                _keyboardIdentifers[0],
+                LocaleManager.Instance[LocaleKeys.AllKeyboards]
+            );
         }
 
         protected virtual void Dispose(bool disposing)
@@ -66,6 +70,16 @@ namespace Ryujinx.Ava.Input
                 _control.KeyUp -= OnKeyPress;
                 _control.KeyDown -= OnKeyRelease;
             }
+        }
+
+        public void EmulateKeyPress(AvaKey key)
+        {
+            _pressedKeys.Add(key);
+        }
+
+        public void EmulateKeyRelease(AvaKey key)
+        {
+            _pressedKeys.Remove(key);
         }
 
         protected void OnKeyPress(object sender, KeyEventArgs args)
