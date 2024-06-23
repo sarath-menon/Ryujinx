@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Timers;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -66,6 +68,10 @@ namespace Ryujinx.Ava
 {
     internal class AppHost
     {
+        // for http server
+        private HttpListener _httpListener;
+        private System.Timers.Timer _messageTimer;
+
         private const int CursorHideIdleTime = 5; // Hide Cursor seconds.
         private const float MaxResolutionScale = 4.0f; // Max resolution hotkeys can scale to before wrapping.
         private const int TargetFps = 60;
@@ -215,6 +221,49 @@ namespace Ryujinx.Ava
 
             _gpuCancellationTokenSource = new CancellationTokenSource();
             _gpuDoneEvent = new ManualResetEvent(false);
+        }
+
+        // Update the method where the Timer is instantiated
+        private void StartHttpServer()
+        {
+            _httpListener = new HttpListener();
+            _httpListener.Prefixes.Add("http://localhost:8086/");
+            _httpListener.Start();
+
+            _httpListener.BeginGetContext(new AsyncCallback(ListenerCallback), _httpListener);
+
+            _messageTimer = new System.Timers.Timer(1000); // Use full namespace here
+            _messageTimer.Elapsed += OnTimedEvent;
+            _messageTimer.AutoReset = true;
+            _messageTimer.Enabled = true;
+        }
+
+        // Add this method to handle the timer event
+        private void OnTimedEvent(Object source, ElapsedEventArgs e)
+        {
+            Console.WriteLine("Publishing empty message...");
+            // Here you can implement the logic to send messages to connected clients
+        }
+
+        // Add this callback method to handle incoming HTTP requests
+        private void ListenerCallback(IAsyncResult result)
+        {
+            HttpListener listener = (HttpListener)result.AsyncState;
+            // Call EndGetContext to complete the asynchronous operation
+            HttpListenerContext context = listener.EndGetContext(result);
+            HttpListenerRequest request = context.Request;
+            // Obtain a response object
+            HttpListenerResponse response = context.Response;
+            // Construct a response.
+            string responseString = "<HTML><BODY> Hello world!</BODY></HTML>";
+            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+            // Get a response stream and write the response to it.
+            response.ContentLength64 = buffer.Length;
+            System.IO.Stream output = response.OutputStream;
+            output.Write(buffer, 0, buffer.Length);
+            // You must close the output stream.
+            output.Close();
+            listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
         }
 
         private void TopLevel_PointerEnteredOrMoved(object sender, PointerEventArgs e)
@@ -470,6 +519,8 @@ namespace Ryujinx.Ava
 
             _viewModel.Volume = ConfigurationState.Instance.System.AudioVolume.Value;
 
+            StartHttpServer();
+
             MainLoop();
 
             Exit();
@@ -601,6 +652,17 @@ namespace Ryujinx.Ava
             _gpuCancellationTokenSource.Dispose();
 
             _chrono.Stop();
+
+            if (_httpListener != null)
+            {
+                _httpListener.Stop();
+                _httpListener.Close();
+            }
+            if (_messageTimer != null)
+            {
+                _messageTimer.Stop();
+                _messageTimer.Dispose();
+            }
         }
 
         public void DisposeGpu()
@@ -1325,6 +1387,7 @@ namespace Ryujinx.Ava
                     if (isCursorVisible)
                     {
                         ShowCursor();
+                        // _renderer.Screenshot(); // screenshot is saved each tiem cursor moves out of the window
                     }
                     else
                     {
