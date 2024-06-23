@@ -346,11 +346,12 @@ namespace Ryujinx.Ava
                             {
                                 using (var ms = new MemoryStream())
                                 {
+                                    _image.Mutate(x => x.Resize(1280, 720));
                                     _image.SaveAsJpeg(
                                         ms,
                                         new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder
                                         {
-                                            Quality = 75
+                                            Quality = 80
                                         }
                                     );
                                     buffer = ms.ToArray();
