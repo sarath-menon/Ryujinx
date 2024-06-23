@@ -286,7 +286,15 @@ namespace Ryujinx.Ava
                         Resume();
                         break;
 
-                    case "/control":
+                    case "/move_player":
+                        if (request.HttpMethod != "POST")
+                        {
+                            responseString = "Invalid request method";
+                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                            response.ContentType = "text/plain";
+                            break;
+                        }
+
                         using (
                             var reader = new StreamReader(
                                 request.InputStream,
@@ -323,6 +331,11 @@ namespace Ryujinx.Ava
                             (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
                             Thread.Sleep(duration);
                             (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
+
+                            // response
+                            responseString = "Status: OK";
+                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                            response.ContentType = "text/plain";
                         }
                         break;
 
