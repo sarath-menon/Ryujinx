@@ -325,6 +325,73 @@ namespace Ryujinx.Ava
                             {
                                 avaKey = Key.D;
                             }
+                            else
+                            {
+                                responseString = "Invalid key";
+                                buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                                response.ContentType = "text/plain";
+                                break;
+                            }
+
+                            // keypress
+                            int duration = int.Parse(requestData["duration"]);
+                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
+                            Thread.Sleep(duration);
+                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
+
+                            // response
+                            responseString = "Status: OK";
+                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                            response.ContentType = "text/plain";
+                        }
+                        break;
+
+                    case "/orbit_camera":
+                        if (request.HttpMethod != "POST")
+                        {
+                            responseString = "Invalid request method";
+                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                            response.ContentType = "text/plain";
+                            break;
+                        }
+
+                        using (
+                            var reader = new StreamReader(
+                                request.InputStream,
+                                request.ContentEncoding
+                            )
+                        )
+                        {
+                            var requestBody = await reader.ReadToEndAsync();
+                            var requestData = JsonConvert.DeserializeObject<
+                                Dictionary<string, string>
+                            >(requestBody);
+                            var key = requestData["key"];
+                            Key avaKey = Key.Unknown;
+
+                            if (key == "Up")
+                            {
+                                avaKey = Key.Down;
+                            }
+                            else if (key == "Down")
+                            {
+                                avaKey = Key.Up;
+                            }
+                            else if (key == "Left")
+                            {
+                                avaKey = Key.Right;
+                            }
+                            else if (key == "Right")
+                            {
+                                avaKey = Key.Left;
+                            }
+                            else
+                            {
+                                responseString = "Invalid key";
+                                buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                                response.ContentType = "text/plain";
+                                break;
+                            }
 
                             // keypress
                             int duration = int.Parse(requestData["duration"]);
