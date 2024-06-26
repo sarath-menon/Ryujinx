@@ -1,9 +1,9 @@
+using System;
+using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Ryujinx.Input;
-using System;
-using System.Numerics;
 using MouseButton = Ryujinx.Input.MouseButton;
 using Size = System.Drawing.Size;
 
@@ -76,8 +76,11 @@ namespace Ryujinx.Ava.Input
                 PressedButtons[button] = false;
             }
         }
+
         private void Parent_PointerPressedEvent(object o, PointerPressedEventArgs args)
         {
+            SetPosition(100.0, 100.0);
+
             uint button = (uint)args.GetCurrentPoint(_widget).Properties.PointerUpdateKind;
 
             if ((uint)PressedButtons.Length > button)
@@ -107,6 +110,17 @@ namespace Ryujinx.Ava.Input
             {
                 PressedButtons[(uint)button] = false;
             }
+        }
+
+        public void EmulateMousePressed(MouseButton button)
+        {
+            uint buttonIndex = 0;
+            PressedButtons[buttonIndex] = true;
+        }
+
+        public void EmulateMouseReleased(MouseButton button)
+        {
+            PressedButtons[(uint)button] = false;
         }
 
         public void SetPosition(double x, double y)

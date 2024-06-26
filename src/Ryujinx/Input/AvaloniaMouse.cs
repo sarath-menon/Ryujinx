@@ -1,8 +1,8 @@
-using Ryujinx.Common.Configuration.Hid;
-using Ryujinx.Input;
 using System;
 using System.Drawing;
 using System.Numerics;
+using Ryujinx.Common.Configuration.Hid;
+using Ryujinx.Input;
 
 namespace Ryujinx.Ava.Input
 {
@@ -77,6 +77,21 @@ namespace Ryujinx.Ava.Input
         public void SetTriggerThreshold(float triggerThreshold)
         {
             throw new NotImplementedException();
+        }
+
+        public void EmulateMousePressed(MouseButton button)
+        {
+            _driver.EmulateMousePressed(button);
+        }
+
+        // public void EmulateMouseReleased(MouseButton button)
+        // {
+        //     _driver.EmulateMouseReleased(button);
+        // }
+
+        public void SetPosition(double x, double y)
+        {
+            _driver.SetPosition(x, y);
         }
 
         public void Dispose()
