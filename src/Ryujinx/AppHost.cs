@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Net.WebSockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
@@ -230,6 +232,69 @@ namespace Ryujinx.Ava
             _gpuDoneEvent = new ManualResetEvent(false);
         }
 
+        private async Task HandleWebSocketConnections(HttpListenerContext context)
+        {
+            if (context.Request.IsWebSocketRequest)
+            {
+                HttpListenerWebSocketContext wsContext = null;
+                try
+                {
+                    wsContext = await context.AcceptWebSocketAsync(subProtocol: null);
+                    WebSocket webSocket = wsContext.WebSocket;
+
+                    while (webSocket.State == WebSocketState.Open)
+                    {
+                        await SendFrameAsWebSocket(webSocket);
+                    }
+                }
+                catch (Exception e)
+                {
+                    // Log or handle the exception as needed
+                    Console.WriteLine($"WebSocket error: {e.Message}");
+                }
+                finally
+                {
+                    wsContext?.WebSocket?.CloseAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "Closing",
+                        CancellationToken.None
+                    );
+                }
+            }
+            else
+            {
+                context.Response.StatusCode = 400;
+                context.Response.Close();
+            }
+        }
+
+        private async Task SendFrameAsWebSocket(WebSocket webSocket)
+        {
+            byte[] frameData;
+            lock (_imageLock)
+            {
+                if (_image != null)
+                {
+                    using (var ms = new MemoryStream())
+                    {
+                        _image.SaveAsJpeg(ms);
+                        frameData = ms.ToArray();
+                    }
+                }
+                else
+                {
+                    frameData = Encoding.UTF8.GetBytes("No frame available");
+                }
+            }
+
+            await webSocket.SendAsync(
+                new ArraySegment<byte>(frameData),
+                WebSocketMessageType.Binary,
+                endOfMessage: true,
+                CancellationToken.None
+            );
+        }
+
         // Update the method where the Timer is instantiated
         private void StartHttpServer()
         {
@@ -238,19 +303,7 @@ namespace Ryujinx.Ava
             _httpListener.Start();
 
             _httpListener.BeginGetContext(new AsyncCallback(ListenerCallback), _httpListener);
-
-            // _messageTimer = new System.Timers.Timer(1000); // Use full namespace here
-            // _messageTimer.Elapsed += OnTimedEvent;
-            // _messageTimer.AutoReset = true;
-            // _messageTimer.Enabled = true;
         }
-
-        // // Add this method to handle the timer event
-        // private void OnTimedEvent(Object source, ElapsedEventArgs e)
-        // {
-        //     Console.WriteLine("Publishing empty message...");
-        //     // Here you can implement the logic to send messages to connected clients
-        // }
 
         // Add this callback method to handle incoming HTTP requests
         private async void ListenerCallback(IAsyncResult result)
@@ -389,6 +442,9 @@ namespace Ryujinx.Ava
                                 break;
                             }
                         }
+                        break;
+                    case "/stream_socket":
+                        await HandleWebSocketConnections(context);
                         break;
                     case "/stream":
                         // indicates that the response will contain a stream of frames
@@ -1526,10 +1582,10 @@ namespace Ryujinx.Ava
                 // Polling becomes expensive if it's not slept.
                 Thread.Sleep(1);
 
-                // Pause after running 100 steps
+                // Pause after running 10 steps
                 if (counter == pauseAfterSteps)
                 {
-                    _renderer.Screenshot();
+                    Task.Run(() => _renderer.Screenshot());
                     counter = 0; // Reset counter
                 }
             }
