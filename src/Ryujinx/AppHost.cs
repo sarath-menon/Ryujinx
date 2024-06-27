@@ -817,81 +817,36 @@ namespace Ryujinx.Ava
                 // Run the screen capture processing in a separate task
                 Task.Run(() =>
                 {
-                    lock (_lockObject)
+                    lock (_imageLock)
                     {
-                        // Get the active application name and sanitize it for file naming
-                        string applicationName = Device.Processes.ActiveApplication.Name;
-                        string sanitizedApplicationName = FileSystemUtils.SanitizeFileName(
-                            applicationName
-                        );
-                        DateTime currentTime = DateTime.Now;
+                        // Load the image data
+                        _image = e.IsBgra
+                            ? Image.LoadPixelData<Bgra32>(e.Data, e.Width, e.Height)
+                            : Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height);
 
-                        // Create a filename for the screenshot
-                        string filename =
-                            $"{sanitizedApplicationName}_{currentTime.Year}-{currentTime.Month:D2}-{currentTime.Day:D2}_{currentTime.Hour:D2}-{currentTime.Minute:D2}-{currentTime.Second:D2}.png";
-
-                        // Determine the directory to save the screenshot based on the launch mode
-                        string directory = AppDataManager.Mode switch
+                        // Apply horizontal flip if needed
+                        if (e.FlipX)
                         {
-                            AppDataManager.LaunchMode.Portable
-                            or AppDataManager.LaunchMode.Custom
-                                => Path.Combine(AppDataManager.BaseDirPath, "screenshots"),
-                            _
-                                => Path.Combine(
-                                    Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                                    "Ryujinx"
-                                ),
-                        };
-
-                        string path = Path.Combine(directory, filename);
-
-                        try
-                        {
-                            // Create the directory if it doesn't exist
-                            Directory.CreateDirectory(directory);
-                        }
-                        catch (Exception ex)
-                        {
-                            // Log an error if the directory creation fails
-                            Logger.Error?.Print(
-                                LogClass.Application,
-                                $"Failed to create directory at path {directory}. Error : {ex.GetType().Name}",
-                                "Screenshot"
-                            );
-
-                            return;
+                            _image.Mutate(x => x.Flip(FlipMode.Horizontal));
                         }
 
-                        lock (_imageLock)
+                        // Apply vertical flip if needed
+                        if (e.FlipY)
                         {
-                            // Load the image data
-                            _image = e.IsBgra
-                                ? Image.LoadPixelData<Bgra32>(e.Data, e.Width, e.Height)
-                                : Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height);
-
-                            // Apply horizontal flip if needed
-                            if (e.FlipX)
-                            {
-                                _image.Mutate(x => x.Flip(FlipMode.Horizontal));
-                            }
-
-                            // Apply vertical flip if needed
-                            if (e.FlipY)
-                            {
-                                _image.Mutate(x => x.Flip(FlipMode.Vertical));
-                            }
-
-                            // // Dispose of the image to free resources
-                            // _image.Dispose();
-
-                            // Log a notice that the screenshot was saved successfully
-                            Logger.Notice.Print(
-                                LogClass.Application,
-                                $"Screenshot saved to {path}",
-                                "Screenshot"
-                            );
+                            _image.Mutate(x => x.Flip(FlipMode.Vertical));
                         }
+
+                        // // Dispose of the image to free resources
+                        // _image.Dispose();
+
+                        // // Log a notice that the screenshot was saved successfully
+                        // Logger.Notice.Print(
+                        //     LogClass.Application,
+                        //     $"Screenshot saved to {path}",
+                        //     "Screenshot"
+                        // );
                     }
+                    // }
                 });
             }
             else
