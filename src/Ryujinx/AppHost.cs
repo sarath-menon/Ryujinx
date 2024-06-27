@@ -77,6 +77,7 @@ namespace Ryujinx.Ava
 
         // private System.Timers.Timer _messageTimer;
         private Image _image; // for screen capture
+        private List<Image> _imageArray = new List<Image>();
 
         private const int CursorHideIdleTime = 5; // Hide Cursor seconds.
         private const float MaxResolutionScale = 4.0f; // Max resolution hotkeys can scale to before wrapping.
@@ -136,6 +137,7 @@ namespace Ryujinx.Ava
 
         private readonly object _lockObject = new();
         private readonly object _imageLock = new();
+        private readonly object _imageArrayLock = new();
 
         public event EventHandler AppExit;
         public event EventHandler<StatusInitEventArgs> StatusInitEvent;
@@ -242,9 +244,26 @@ namespace Ryujinx.Ava
                     wsContext = await context.AcceptWebSocketAsync(subProtocol: null);
                     WebSocket webSocket = wsContext.WebSocket;
 
-                    while (webSocket.State == WebSocketState.Open)
+                    // Parse the endpoint name from the URL
+                    string endpointName = context.Request.Url.AbsolutePath;
+
+                    switch (endpointName)
                     {
-                        await SendFrameAsWebSocket(webSocket);
+                        case "/stream_socket":
+                            while (webSocket.State == WebSocketState.Open)
+                            {
+                                await SendFrameAsWebSocket(webSocket);
+                            }
+                            break;
+                        case "/stream_sequence":
+                            while (webSocket.State == WebSocketState.Open)
+                            {
+                                await SendImageArrayAsWebSocket(webSocket);
+                            }
+                            break;
+                        default:
+                            // Handle unknown endpoint
+                            break;
                     }
                 }
                 catch (Exception e)
@@ -266,6 +285,45 @@ namespace Ryujinx.Ava
                 context.Response.StatusCode = 400;
                 context.Response.Close();
             }
+        }
+
+        private async Task SendImageArrayAsWebSocket(WebSocket webSocket)
+        {
+            List<Image> imageArrayCopy;
+
+            lock (_imageArrayLock)
+            {
+                imageArrayCopy = new List<Image>(_imageArray);
+                _imageArray.Clear();
+            }
+
+            int counter = 0;
+            foreach (var imageToSend in imageArrayCopy)
+            {
+                byte[] frameData;
+
+                using (var ms = new MemoryStream())
+                {
+                    imageToSend.SaveAsJpeg(ms);
+                    frameData = ms.ToArray();
+                }
+
+                await webSocket.SendAsync(
+                    new ArraySegment<byte>(frameData),
+                    WebSocketMessageType.Binary,
+                    endOfMessage: true, // Set to true to indicate the end of the message
+                    CancellationToken.None
+                );
+
+                Console.WriteLine("Counter value: " + counter);
+                counter++;
+            }
+
+            await webSocket.CloseAsync(
+                WebSocketCloseStatus.NormalClosure,
+                "Closing",
+                CancellationToken.None
+            );
         }
 
         private async Task SendFrameAsWebSocket(WebSocket webSocket)
@@ -446,6 +504,9 @@ namespace Ryujinx.Ava
                     case "/stream_socket":
                         await HandleWebSocketConnections(context);
                         break;
+                    case "/stream_sequence":
+                        await HandleWebSocketConnections(context);
+                        break;
                     case "/stream":
                         // indicates that the response will contain a stream of frames
                         response.ContentType = "multipart/x-mixed-replace; boundary=frame";
@@ -548,6 +609,7 @@ namespace Ryujinx.Ava
                             }
                         }
                         break;
+
                     default:
                         responseString = "<HTML><BODY>Invalid request.</BODY></HTML>";
                         buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
@@ -1537,11 +1599,24 @@ namespace Ryujinx.Ava
                 // Polling becomes expensive if it's not slept.
                 Thread.Sleep(1);
 
-                // Pause after running 10 steps
+                // screenshot every 100 frames
                 if (counter == pauseAfterSteps)
                 {
                     Task.Run(() => _renderer.Screenshot());
                     counter = 0; // Reset counter
+
+                    lock (_imageArrayLock)
+                    {
+                        if (_imageArray.Count >= 10)
+                        {
+                            _imageArray.Clear();
+                        }
+
+                        lock (_imageLock)
+                        {
+                            _imageArray.Add(_image);
+                        }
+                    }
                 }
             }
         }
