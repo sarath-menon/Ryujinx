@@ -423,21 +423,6 @@ namespace Ryujinx.Ava
                                     }
                                 }
 
-                                // // Write the frame boundary and headers
-                                // var header =
-                                //     $"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {frameData.Length}\r\n\r\n";
-                                // var headerBytes = System.Text.Encoding.UTF8.GetBytes(header);
-                                // await outputStream.WriteAsync(headerBytes, 0, headerBytes.Length);
-
-                                // // Write the frame data
-                                // await outputStream.WriteAsync(frameData, 0, frameData.Length);
-
-                                // // Flush the output stream
-                                // await outputStream.FlushAsync();
-
-                                // // Delay to control the frame rate (adjust as needed)
-                                // await Task.Delay(1000 / 30); // 30 FPS
-
                                 try
                                 {
                                     // Write the frame boundary and headers
