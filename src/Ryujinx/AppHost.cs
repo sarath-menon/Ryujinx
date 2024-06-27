@@ -78,6 +78,7 @@ namespace Ryujinx.Ava
         // private System.Timers.Timer _messageTimer;
         private Image _image; // for screen capture
         private List<Image> _imageArray = new List<Image>();
+        private byte[] _imageByte;
 
         private const int CursorHideIdleTime = 5; // Hide Cursor seconds.
         private const float MaxResolutionScale = 4.0f; // Max resolution hotkeys can scale to before wrapping.
@@ -331,13 +332,15 @@ namespace Ryujinx.Ava
             byte[] frameData;
             lock (_imageLock)
             {
-                if (_image != null)
+                if (_imageByte != null)
                 {
-                    using (var ms = new MemoryStream())
-                    {
-                        _image.SaveAsJpeg(ms);
-                        frameData = ms.ToArray();
-                    }
+                    // using (var ms = new MemoryStream())
+                    // {
+                    //     _image.SaveAsJpeg(ms);
+                    //     frameData = ms.ToArray();
+                    // }
+
+                    frameData = _imageByte;
                 }
                 else
                 {
@@ -525,23 +528,19 @@ namespace Ryujinx.Ava
                         {
                             while (true)
                             {
-                                // Capture the current frame as a JPEG
-                                byte[] frameData;
+                                string base64Data;
                                 lock (_imageLock)
                                 {
-                                    if (_image != null)
+                                    if (_imageByte != null)
                                     {
-                                        using (var ms = new MemoryStream())
-                                        {
-                                            _image.SaveAsJpeg(ms);
-                                            frameData = ms.ToArray();
-                                        }
+                                        // Convert the first image in the array to base64 string
+                                        base64Data = Convert.ToBase64String(_imageByte);
                                     }
                                     else
                                     {
                                         // If no image is available, send a placeholder frame
-                                        frameData = System.Text.Encoding.UTF8.GetBytes(
-                                            "No frame available"
+                                        base64Data = Convert.ToBase64String(
+                                            Encoding.UTF8.GetBytes("No frame available")
                                         );
                                     }
                                 }
@@ -550,16 +549,17 @@ namespace Ryujinx.Ava
                                 {
                                     // Write the frame boundary and headers
                                     var header =
-                                        $"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {frameData.Length}\r\n\r\n";
-                                    var headerBytes = System.Text.Encoding.UTF8.GetBytes(header);
+                                        $"--frame\r\nContent-Type: text/plain\r\nContent-Length: {base64Data.Length}\r\n\r\n";
+                                    var headerBytes = Encoding.UTF8.GetBytes(header);
                                     await outputStream.WriteAsync(
                                         headerBytes,
                                         0,
                                         headerBytes.Length
                                     );
 
-                                    // Write the frame data
-                                    await outputStream.WriteAsync(frameData, 0, frameData.Length);
+                                    // Write the base64 data
+                                    var frameBytes = Encoding.UTF8.GetBytes(base64Data);
+                                    await outputStream.WriteAsync(frameBytes, 0, frameBytes.Length);
 
                                     // Flush the output stream
                                     await outputStream.FlushAsync();
@@ -885,6 +885,8 @@ namespace Ryujinx.Ava
                         _image = e.IsBgra
                             ? Image.LoadPixelData<Bgra32>(e.Data, e.Width, e.Height)
                             : Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height);
+
+                        _imageByte = e.Data;
 
                         // Apply horizontal flip if needed
                         if (e.FlipX)
@@ -1587,7 +1589,7 @@ namespace Ryujinx.Ava
         private void MainLoop()
         {
             int counter = 0;
-            const int pauseAfterSteps = 100;
+            const int pauseAfterSteps = 10;
             // (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(Key.W);
             (_mouseInterface as AvaloniaMouse)?.EmulateMousePressed(MouseButton.Button1);
 
@@ -1605,18 +1607,18 @@ namespace Ryujinx.Ava
                     Task.Run(() => _renderer.Screenshot());
                     counter = 0; // Reset counter
 
-                    lock (_imageArrayLock)
-                    {
-                        if (_imageArray.Count >= 10)
-                        {
-                            _imageArray.Clear();
-                        }
+                    // lock (_imageArrayLock)
+                    // {
+                    //     if (_imageArray.Count >= 10)
+                    //     {
+                    //         _imageArray.Clear();
+                    //     }
 
-                        lock (_imageLock)
-                        {
-                            _imageArray.Add(_image);
-                        }
-                    }
+                    //     lock (_imageLock)
+                    //     {
+                    //         _imageArray.Add(_image);
+                    //     }
+                    // }
                 }
             }
         }
