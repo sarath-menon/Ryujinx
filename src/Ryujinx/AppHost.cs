@@ -391,6 +391,54 @@ namespace Ryujinx.Ava
                         }
                         break;
 
+                    case "/stream":
+                        response.ContentType = "multipart/x-mixed-replace; boundary=frame";
+                        response.AddHeader("Cache-Control", "no-cache");
+                        response.AddHeader("Pragma", "no-cache");
+
+                        using (var outputStream = response.OutputStream)
+                        {
+                            while (true)
+                            {
+                                // Capture the current frame as a JPEG
+                                byte[] frameData;
+                                lock (_imageLock)
+                                {
+                                    if (_image != null)
+                                    {
+                                        using (var ms = new MemoryStream())
+                                        {
+                                            _image.SaveAsJpeg(ms);
+                                            frameData = ms.ToArray();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // If no image is available, send a placeholder frame
+                                        frameData = System.Text.Encoding.UTF8.GetBytes(
+                                            "No frame available"
+                                        );
+                                    }
+                                }
+
+                                // Write the frame boundary and headers
+                                var header =
+                                    $"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {frameData.Length}\r\n\r\n";
+                                var headerBytes = System.Text.Encoding.UTF8.GetBytes(header);
+                                await outputStream.WriteAsync(headerBytes, 0, headerBytes.Length);
+
+                                // Write the frame data
+                                await outputStream.WriteAsync(frameData, 0, frameData.Length);
+
+                                // Flush the output stream
+                                await outputStream.FlushAsync();
+
+                                // Delay to control the frame rate (adjust as needed)
+                                await Task.Delay(1000 / 30); // 30 FPS
+                            }
+                        }
+                        break;
+
                     case "/screenshot":
                         lock (_imageLock)
                         {
