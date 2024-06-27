@@ -390,13 +390,19 @@ namespace Ryujinx.Ava
                             }
                         }
                         break;
-
                     case "/stream":
                         // indicates that the response will contain a stream of frames
                         response.ContentType = "multipart/x-mixed-replace; boundary=frame";
+
                         // prevent caching of the stream
                         response.AddHeader("Cache-Control", "no-cache");
                         response.AddHeader("Pragma", "no-cache");
+
+                        // Add current UTC time to the response headers
+                        response.AddHeader(
+                            "X-Timestamp",
+                            DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+                        );
 
                         using (var outputStream = response.OutputStream)
                         {
