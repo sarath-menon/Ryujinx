@@ -392,7 +392,9 @@ namespace Ryujinx.Ava
                         break;
 
                     case "/stream":
+                        // indicates that the response will contain a stream of frames
                         response.ContentType = "multipart/x-mixed-replace; boundary=frame";
+                        // prevent caching of the stream
                         response.AddHeader("Cache-Control", "no-cache");
                         response.AddHeader("Pragma", "no-cache");
 
@@ -421,20 +423,53 @@ namespace Ryujinx.Ava
                                     }
                                 }
 
-                                // Write the frame boundary and headers
-                                var header =
-                                    $"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {frameData.Length}\r\n\r\n";
-                                var headerBytes = System.Text.Encoding.UTF8.GetBytes(header);
-                                await outputStream.WriteAsync(headerBytes, 0, headerBytes.Length);
+                                // // Write the frame boundary and headers
+                                // var header =
+                                //     $"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {frameData.Length}\r\n\r\n";
+                                // var headerBytes = System.Text.Encoding.UTF8.GetBytes(header);
+                                // await outputStream.WriteAsync(headerBytes, 0, headerBytes.Length);
 
-                                // Write the frame data
-                                await outputStream.WriteAsync(frameData, 0, frameData.Length);
+                                // // Write the frame data
+                                // await outputStream.WriteAsync(frameData, 0, frameData.Length);
 
-                                // Flush the output stream
-                                await outputStream.FlushAsync();
+                                // // Flush the output stream
+                                // await outputStream.FlushAsync();
 
-                                // Delay to control the frame rate (adjust as needed)
-                                await Task.Delay(1000 / 30); // 30 FPS
+                                // // Delay to control the frame rate (adjust as needed)
+                                // await Task.Delay(1000 / 30); // 30 FPS
+
+                                try
+                                {
+                                    // Write the frame boundary and headers
+                                    var header =
+                                        $"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {frameData.Length}\r\n\r\n";
+                                    var headerBytes = System.Text.Encoding.UTF8.GetBytes(header);
+                                    await outputStream.WriteAsync(
+                                        headerBytes,
+                                        0,
+                                        headerBytes.Length
+                                    );
+
+                                    // Write the frame data
+                                    await outputStream.WriteAsync(frameData, 0, frameData.Length);
+
+                                    // Flush the output stream
+                                    await outputStream.FlushAsync();
+
+                                    // Check if the client is still connected
+                                    if (!response.OutputStream.CanWrite)
+                                    {
+                                        break; // Client disconnected, exit the loop
+                                    }
+
+                                    // Delay to control the frame rate (adjust as needed)
+                                    await Task.Delay(1000 / 30); // 30 FPS
+                                }
+                                catch (Exception)
+                                {
+                                    // Handle exceptions, e.g., log the error and break the loop
+                                    break;
+                                }
                             }
                         }
                         break;
