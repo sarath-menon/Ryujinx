@@ -95,6 +95,7 @@ namespace Ryujinx.Ava
 
         private readonly MainWindowViewModel _viewModel;
         private readonly IKeyboard _keyboardInterface;
+        private readonly IMouse _mouseInterface;
         private readonly TopLevel _topLevel;
         public RendererHost RendererHost;
 
@@ -173,6 +174,7 @@ namespace Ryujinx.Ava
             _inputManager.SetMouseDriver(new AvaloniaMouseDriver(_topLevel, renderer));
 
             _keyboardInterface = (IKeyboard)_inputManager.KeyboardDriver.GetGamepad("0");
+            _mouseInterface = (IMouse)_inputManager.MouseDriver.GetGamepad("0");
 
             NpadManager = _inputManager.CreateNpadManager();
             TouchScreenManager = _inputManager.CreateTouchScreenManager();
@@ -286,7 +288,7 @@ namespace Ryujinx.Ava
                         Resume();
                         break;
 
-                    case "/move_player":
+                    case "/keypress":
                         if (request.HttpMethod != "POST")
                         {
                             responseString = "Invalid request method";
@@ -309,28 +311,17 @@ namespace Ryujinx.Ava
                             var key = requestData["key"];
                             Key avaKey = Key.Unknown;
 
-                            if (key == "W")
+                            // Assuming 'key' is a string that exactly matches an enum name in Key
+                            try
                             {
-                                avaKey = Key.W;
+                                avaKey = (Key)Enum.Parse(typeof(Key), key);
                             }
-                            else if (key == "A")
+                            catch (ArgumentException)
                             {
-                                avaKey = Key.A;
-                            }
-                            else if (key == "S")
-                            {
-                                avaKey = Key.S;
-                            }
-                            else if (key == "D")
-                            {
-                                avaKey = Key.D;
-                            }
-                            else
-                            {
+                                // Handle the case where the string does not match any enum name
                                 responseString = "Invalid key";
                                 buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
                                 response.ContentType = "text/plain";
-                                break;
                             }
 
                             // keypress
@@ -346,7 +337,7 @@ namespace Ryujinx.Ava
                         }
                         break;
 
-                    case "/orbit_camera":
+                    case "/click_mouse":
                         if (request.HttpMethod != "POST")
                         {
                             responseString = "Invalid request method";
@@ -366,43 +357,37 @@ namespace Ryujinx.Ava
                             var requestData = JsonConvert.DeserializeObject<
                                 Dictionary<string, string>
                             >(requestBody);
-                            var key = requestData["key"];
-                            Key avaKey = Key.Unknown;
+                            var button = requestData["button"];
+                            var x = double.Parse(requestData["x"]);
+                            var y = double.Parse(requestData["y"]);
 
-                            if (key == "Up")
+                            if (button == "Left")
                             {
-                                avaKey = Key.Down;
+                                (_mouseInterface as AvaloniaMouse)?.SetPosition(x, y);
+
+                                (_mouseInterface as AvaloniaMouse)?.EmulateMousePressed(
+                                    MouseButton.Button1
+                                );
                             }
-                            else if (key == "Down")
+                            else if (button == "Right")
                             {
-                                avaKey = Key.Up;
+                                (_mouseInterface as AvaloniaMouse)?.SetPosition(x, y);
+
+                                (_mouseInterface as AvaloniaMouse)?.EmulateMousePressed(
+                                    MouseButton.Button2
+                                );
                             }
-                            else if (key == "Left")
+                            else if (button == "None")
                             {
-                                avaKey = Key.Right;
-                            }
-                            else if (key == "Right")
-                            {
-                                avaKey = Key.Left;
+                                (_mouseInterface as AvaloniaMouse)?.SetPosition(x, y);
                             }
                             else
                             {
-                                responseString = "Invalid key";
+                                responseString = "Invalid button";
                                 buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
                                 response.ContentType = "text/plain";
                                 break;
                             }
-
-                            // keypress
-                            int duration = int.Parse(requestData["duration"]);
-                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
-                            Thread.Sleep(duration);
-                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
-
-                            // response
-                            responseString = "Status: OK";
-                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                            response.ContentType = "text/plain";
                         }
                         break;
 
@@ -1457,6 +1442,7 @@ namespace Ryujinx.Ava
             int counter = 0;
             const int pauseAfterSteps = 100;
             // (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(Key.W);
+            (_mouseInterface as AvaloniaMouse)?.EmulateMousePressed(MouseButton.Button1);
 
             while (_isActive)
             {
