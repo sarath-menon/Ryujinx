@@ -321,14 +321,22 @@ namespace Ryujinx.Ava
                             >(message);
                             if (requestData != null) // Check if requestData is not null
                             {
-                                if (
-                                    requestData.ContainsKey("action")
-                                    && requestData["action"] == "request_frames"
-                                )
+                                string endpointName = context.Request.RawUrl;
+                                switch (endpointName)
                                 {
-                                    requestData.TryGetValue("count", out string countStr);
-                                    int frameCount = int.Parse(countStr ?? "1"); // Default to 1 frame if not specified
-                                    await SendFrameAsWebSocket(webSocket, frameCount);
+                                    case "/stream_websocket":
+                                        if (
+                                            requestData.ContainsKey("action")
+                                            && requestData["action"] == "request_frames"
+                                        )
+                                        {
+                                            requestData.TryGetValue("count", out string countStr);
+                                            int frameCount = int.Parse(countStr ?? "1"); // Default to 1 frame if not specified
+                                            await SendFrameAsWebSocket(webSocket, frameCount);
+                                        }
+                                        break;
+                                    default:
+                                        break;
                                 }
                             }
                         }
