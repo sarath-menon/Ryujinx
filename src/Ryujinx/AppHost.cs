@@ -243,25 +243,19 @@ namespace Ryujinx.Ava
                     var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
                     webSocket = webSocketContext.WebSocket;
 
-                    if (webSocket != null) // Ensure the WebSocket is not null
+                    while (webSocket != null && webSocket.State == WebSocketState.Open)
                     {
-                        while (webSocket != null && webSocket.State == WebSocketState.Open)
+                        string endpointName = context.Request.RawUrl;
+                        switch (endpointName)
                         {
-                            string endpointName = context.Request.RawUrl;
-                            switch (endpointName)
-                            {
-                                case "/stream_websocket":
-                                    await SendFrameAsWebSocket(webSocket);
-                                    Console.WriteLine("Streaming websocket task started");
-                                    break;
-                                case "/keypress_websocket":
-                                    await DoKeypress(webSocket);
-                                    Console.WriteLine("Keypress websocket task started");
-                                    break;
-                                default:
-                                    Console.WriteLine("Unknown WebSocket endpoint");
-                                    break;
-                            }
+                            case "/stream_websocket":
+                                await SendFrameAsWebSocket(webSocket);
+                                break;
+                            case "/keypress_websocket":
+                                await DoKeypress(webSocket);
+                                break;
+                            default:
+                                break;
                         }
                     }
                 }
