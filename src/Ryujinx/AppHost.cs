@@ -236,132 +236,86 @@ namespace Ryujinx.Ava
             _gpuDoneEvent = new ManualResetEvent(false);
         }
 
-        // private async Task HandleWebSocketConnection(HttpListenerContext context)
-        // {
-        //     if (context.Request.IsWebSocketRequest)
-        //     {
-        //         WebSocket webSocket = null;
-        //         try
-        //         {
-        //             var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
-        //             webSocket = webSocketContext.WebSocket;
-
-        //             while (webSocket != null && webSocket.State == WebSocketState.Open)
-        //             {
-        //                 string endpointName = context.Request.RawUrl;
-        //                 switch (endpointName)
-        //                 {
-        //                     case "/stream_websocket":
-        //                         await SendFrameAsWebSocket(webSocket);
-        //                         break;
-        //                     case "/keypress_websocket":
-        //                         await DoKeypress(webSocket);
-        //                         break;
-        //                     default:
-        //                         break;
-        //                 }
-        //             }
-        //         }
-        //         catch (Exception e)
-        //         {
-        //             Console.WriteLine($"WebSocket error: {e.Message}");
-        //         }
-        //         finally
-        //         {
-        //             if (webSocket != null && webSocket.State != WebSocketState.Closed)
-        //             {
-        //                 await webSocket.CloseAsync(
-        //                     WebSocketCloseStatus.InternalServerError,
-        //                     "Error occurred",
-        //                     CancellationToken.None
-        //                 );
-        //             }
-        //         }
-        //     }
-        //     else
-        //     {
-        //         context.Response.StatusCode = 400;
-        //         context.Response.Close();
-        //     }
-        // }
-
         private async Task HandleWebSocketConnection(HttpListenerContext context)
         {
-            if (context.Request.IsWebSocketRequest)
-            {
-                WebSocket webSocket = null;
-                try
-                {
-                    var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
-                    webSocket = webSocketContext.WebSocket;
-
-                    while (webSocket != null && webSocket.State == WebSocketState.Open)
-                    {
-                        var buffer = new ArraySegment<byte>(new byte[2048]);
-                        WebSocketReceiveResult result = await webSocket.ReceiveAsync(
-                            buffer,
-                            CancellationToken.None
-                        );
-
-                        if (!result.EndOfMessage)
-                        {
-                            // Handle cases where the entire message is not received in one frame.
-                            continue;
-                        }
-
-                        if (buffer.Array != null) // Check if the buffer array is not null
-                        {
-                            string message = Encoding.UTF8.GetString(
-                                buffer.Array,
-                                buffer.Offset,
-                                result.Count
-                            );
-                            Dictionary<string, string> requestData = JsonConvert.DeserializeObject<
-                                Dictionary<string, string>
-                            >(message);
-                            if (requestData != null) // Check if requestData is not null
-                            {
-                                string endpointName = context.Request.RawUrl;
-                                switch (endpointName)
-                                {
-                                    case "/stream_websocket":
-                                        if (
-                                            requestData.ContainsKey("action")
-                                            && requestData["action"] == "request_frames"
-                                        )
-                                        {
-                                            requestData.TryGetValue("count", out string countStr);
-                                            int frameCount = int.Parse(countStr ?? "1"); // Default to 1 frame if not specified
-                                            await SendFrameAsWebSocket(webSocket, frameCount);
-                                        }
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"WebSocket error: {e.Message}");
-                }
-                finally
-                {
-                    if (webSocket != null && webSocket.State != WebSocketState.Closed)
-                    {
-                        await webSocket.CloseAsync(
-                            WebSocketCloseStatus.InternalServerError,
-                            "Error occurred",
-                            CancellationToken.None
-                        );
-                    }
-                }
-            }
-            else
+            if (!context.Request.IsWebSocketRequest)
             {
                 context.Response.StatusCode = 400;
                 context.Response.Close();
+                return;
+            }
+
+            WebSocket webSocket = null;
+            try
+            {
+                var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
+                webSocket = webSocketContext.WebSocket;
+
+                var buffer = new ArraySegment<byte>(new byte[2048]);
+                while (webSocket != null && webSocket.State == WebSocketState.Open)
+                {
+                    WebSocketReceiveResult result = await webSocket.ReceiveAsync(
+                        buffer,
+                        CancellationToken.None
+                    );
+
+                    // safety checks
+                    if (!result.EndOfMessage)
+                        continue;
+                    if (buffer.Array == null)
+                        continue;
+
+                    // deserialize the message
+                    string message = Encoding.UTF8.GetString(
+                        buffer.Array,
+                        buffer.Offset,
+                        result.Count
+                    );
+                    var requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(
+                        message
+                    );
+                    if (requestData == null)
+                        continue;
+
+                    string endpointName = context.Request.RawUrl;
+                    switch (endpointName)
+                    {
+                        case "/stream_websocket":
+                            if (
+                                requestData.TryGetValue("action", out string action)
+                                && action == "request_frames"
+                            )
+                            {
+                                // get the number of frames to send (if not set, default to 1)
+                                int frameCount = int.TryParse(requestData["count"], out int count)
+                                    ? count
+                                    : 1;
+                                await SendFrameAsWebSocket(webSocket, frameCount);
+                            }
+                            break;
+                        case "/keypress_websocket":
+                            await DoKeypress(webSocket);
+                            break;
+                        default:
+                            await SendErrorMessage(webSocket, "Unsupported endpoint");
+                            break;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"WebSocket error: {e.Message}");
+            }
+            finally
+            {
+                if (webSocket != null && webSocket.State != WebSocketState.Closed)
+                {
+                    await webSocket.CloseAsync(
+                        WebSocketCloseStatus.InternalServerError,
+                        "Error occurred",
+                        CancellationToken.None
+                    );
+                }
             }
         }
 
@@ -463,7 +417,7 @@ namespace Ryujinx.Ava
 
                 if (i < frameCount - 1) // Wait for a short interval before sending the next frame
                 {
-                    await Task.Delay(1); // Delay can be adjusted or made configurable
+                    await Task.Delay(1);
                 }
             }
         }
