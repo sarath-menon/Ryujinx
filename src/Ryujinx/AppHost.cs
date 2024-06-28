@@ -421,6 +421,7 @@ namespace Ryujinx.Ava
         }
 
         // Add this callback method to handle incoming HTTP requests
+        // Update the method where WebSocket connections are handled
         private async void ListenerCallback(IAsyncResult result)
         {
             HttpListener listener = (HttpListener)result.AsyncState;
@@ -428,7 +429,6 @@ namespace Ryujinx.Ava
 
             try
             {
-                // Retrieve the context of the incoming HTTP request
                 context = listener.EndGetContext(result);
             }
             catch (Exception ex)
@@ -437,255 +437,36 @@ namespace Ryujinx.Ava
                 return;
             }
 
-            HttpListenerRequest request = context.Request;
-            HttpListenerResponse response = context.Response;
-
-            try
+            // Handle each request in a new task
+            Task.Run(async () =>
             {
-                byte[] buffer = Array.Empty<byte>();
-                string responseString = string.Empty; // Declare once outside the if-else blocks
+                HttpListenerRequest request = context.Request;
+                HttpListenerResponse response = context.Response;
 
-                string requestUrl = request.Url.AbsolutePath;
-                switch (requestUrl)
+                try
                 {
-                    case "/pause":
-                        Pause();
-                        break;
-
-                    case "/resume":
-                        Resume();
-                        break;
-
-                    case "/keypress":
-                        if (request.HttpMethod != "POST")
-                        {
-                            responseString = "Invalid request method";
-                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                            response.ContentType = "text/plain";
-                            break;
-                        }
-
-                        using (
-                            var reader = new StreamReader(
-                                request.InputStream,
-                                request.ContentEncoding
-                            )
-                        )
-                        {
-                            var requestBody = await reader.ReadToEndAsync();
-                            var requestData = JsonConvert.DeserializeObject<
-                                Dictionary<string, string>
-                            >(requestBody);
-                            var key = requestData["key"];
-                            Key avaKey = Key.Unknown;
-
-                            // Assuming 'key' is a string that exactly matches an enum name in Key
-                            try
-                            {
-                                avaKey = (Key)Enum.Parse(typeof(Key), key);
-                            }
-                            catch (ArgumentException)
-                            {
-                                // Handle the case where the string does not match any enum name
-                                responseString = "Invalid key";
-                                buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                                response.ContentType = "text/plain";
-                            }
-
-                            // keypress
-                            int duration = int.Parse(requestData["duration"]);
-                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
-                            Thread.Sleep(duration);
-                            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
-
-                            // response
-                            responseString = "Status: OK";
-                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                            response.ContentType = "text/plain";
-                        }
-                        break;
-
-                    case "/click_mouse":
-                        if (request.HttpMethod != "POST")
-                        {
-                            responseString = "Invalid request method";
-                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                            response.ContentType = "text/plain";
-                            break;
-                        }
-
-                        using (
-                            var reader = new StreamReader(
-                                request.InputStream,
-                                request.ContentEncoding
-                            )
-                        )
-                        {
-                            var requestBody = await reader.ReadToEndAsync();
-                            var requestData = JsonConvert.DeserializeObject<
-                                Dictionary<string, string>
-                            >(requestBody);
-                            var button = requestData["button"];
-                            var x = double.Parse(requestData["x"]);
-                            var y = double.Parse(requestData["y"]);
-
-                            if (button == "Left")
-                            {
-                                (_mouseInterface as AvaloniaMouse)?.SetPosition(x, y);
-
-                                (_mouseInterface as AvaloniaMouse)?.EmulateMousePressed(
-                                    MouseButton.Button1
-                                );
-                            }
-                            else if (button == "Right")
-                            {
-                                (_mouseInterface as AvaloniaMouse)?.SetPosition(x, y);
-
-                                (_mouseInterface as AvaloniaMouse)?.EmulateMousePressed(
-                                    MouseButton.Button2
-                                );
-                            }
-                            else if (button == "None")
-                            {
-                                (_mouseInterface as AvaloniaMouse)?.SetPosition(x, y);
-                            }
-                            else
-                            {
-                                responseString = "Invalid button";
-                                buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                                response.ContentType = "text/plain";
-                                break;
-                            }
-                        }
-                        break;
-                    case "/stream_websocket":
+                    if (request.Url.AbsolutePath == "/stream_websocket")
+                    {
                         await HandleStreamSocketConnection(context);
-                        break;
-                    case "/keypress_websocket":
+                    }
+                    else if (request.Url.AbsolutePath == "/keypress_websocket")
+                    {
                         await HandleKeypressSocketConnection(context);
-                        break;
-
-                    case "/stream_http":
-                        // indicates that the response will contain a stream of frames
-                        response.ContentType = "multipart/x-mixed-replace; boundary=frame";
-
-                        // prevent caching of the stream
-                        response.AddHeader("Cache-Control", "no-cache");
-                        response.AddHeader("Pragma", "no-cache");
-
-                        // Add current UTC time to the response headers
-                        response.AddHeader(
-                            "X-Timestamp",
-                            DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-                        );
-
-                        using (var outputStream = response.OutputStream)
-                        {
-                            while (true)
-                            {
-                                string base64Data;
-                                lock (_imageLock)
-                                {
-                                    if (_imageByte != null)
-                                    {
-                                        // Convert the first image in the array to base64 string
-                                        base64Data = Convert.ToBase64String(_imageByte);
-                                    }
-                                    else
-                                    {
-                                        // If no image is available, send a placeholder frame
-                                        base64Data = Convert.ToBase64String(
-                                            Encoding.UTF8.GetBytes("No frame available")
-                                        );
-                                    }
-                                }
-
-                                try
-                                {
-                                    // Write the frame boundary and headers
-                                    var header =
-                                        $"--frame\r\nContent-Type: text/plain\r\nContent-Length: {base64Data.Length}\r\n\r\n";
-                                    var headerBytes = Encoding.UTF8.GetBytes(header);
-                                    await outputStream.WriteAsync(
-                                        headerBytes,
-                                        0,
-                                        headerBytes.Length
-                                    );
-
-                                    // Write the base64 data
-                                    var frameBytes = Encoding.UTF8.GetBytes(base64Data);
-                                    await outputStream.WriteAsync(frameBytes, 0, frameBytes.Length);
-
-                                    // Flush the output stream
-                                    await outputStream.FlushAsync();
-
-                                    // Check if the client is still connected
-                                    if (!response.OutputStream.CanWrite)
-                                    {
-                                        break; // Client disconnected, exit the loop
-                                    }
-
-                                    // Delay to control the frame rate (adjust as needed)
-                                    await Task.Delay(1000 / 30); // 30 FPS
-                                }
-                                catch (Exception)
-                                {
-                                    // Handle exceptions, e.g., log the error and break the loop
-                                    break;
-                                }
-                            }
-                        }
-                        break;
-
-                    case "/screenshot":
-                        lock (_imageLock)
-                        {
-                            if (_image != null)
-                            {
-                                using (var ms = new MemoryStream())
-                                {
-                                    _image.Mutate(x => x.Resize(1280, 720));
-                                    _image.SaveAsJpeg(
-                                        ms,
-                                        new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder
-                                        {
-                                            Quality = 80
-                                        }
-                                    );
-                                    buffer = ms.ToArray();
-                                    response.ContentType = "image/jpeg";
-                                }
-                            }
-                            else
-                            {
-                                responseString = "<HTML><BODY> No image available.</BODY></HTML>";
-                                buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                                response.ContentType = "text/html";
-                            }
-                        }
-                        break;
-
-                    default:
-                        responseString = "<HTML><BODY>Invalid request.</BODY></HTML>";
-                        buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                        response.ContentType = "text/html";
-                        break;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("Unsupported request type.");
+                    }
                 }
-
-                response.ContentLength64 = buffer.Length;
-                using (System.IO.Stream output = response.OutputStream)
+                catch (Exception ex)
                 {
-                    await output.WriteAsync(buffer, 0, buffer.Length);
+                    // Handle errors (e.g., client disconnected, etc.)
                 }
-            }
-            catch (Exception ex)
-            {
-                // Handle errors (e.g., client disconnected, etc.)
-            }
-            finally
-            {
-                response.Close();
-            }
+                finally
+                {
+                    response.Close();
+                }
+            });
 
             listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
         }
