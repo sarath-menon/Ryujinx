@@ -243,20 +243,12 @@ namespace Ryujinx.Ava
                     wsContext = await context.AcceptWebSocketAsync(subProtocol: null);
                     WebSocket webSocket = wsContext.WebSocket;
 
-                    // Parse the endpoint name from the URL
-                    string endpointName = context.Request.Url.AbsolutePath;
+                    // // Parse the endpoint name from the URL
+                    // string endpointName = context.Request.Url.AbsolutePath;
 
-                    switch (endpointName)
+                    while (webSocket.State == WebSocketState.Open)
                     {
-                        case "/stream_socket":
-                            while (webSocket.State == WebSocketState.Open)
-                            {
-                                await SendFrameAsWebSocket(webSocket);
-                            }
-                            break;
-                        default:
-                            // Handle unknown endpoint
-                            break;
+                        await SendFrameAsWebSocket(webSocket);
                     }
                 }
                 catch (Exception e)
@@ -287,12 +279,6 @@ namespace Ryujinx.Ava
             {
                 if (_imageByte != null)
                 {
-                    // using (var ms = new MemoryStream())
-                    // {
-                    //     _image.SaveAsJpeg(ms);
-                    //     frameData = ms.ToArray();
-                    // }
-
                     frameData = _imageByte;
                 }
                 else
@@ -457,11 +443,11 @@ namespace Ryujinx.Ava
                             }
                         }
                         break;
-                    case "/stream_socket":
+                    case "/stream_websocket":
                         await HandleWebSocketConnections(context);
                         break;
 
-                    case "/stream":
+                    case "/stream_http":
                         // indicates that the response will contain a stream of frames
                         response.ContentType = "multipart/x-mixed-replace; boundary=frame";
 
