@@ -294,7 +294,16 @@ namespace Ryujinx.Ava
                             }
                             break;
                         case "/keypress_websocket":
-                            await DoKeypress(webSocket);
+                            if (
+                                requestData.TryGetValue("key", out string key)
+                                && requestData.TryGetValue("duration", out string durationStr)
+                            )
+                            {
+                                Enum.TryParse<Key>(key, out Key avaKey);
+                                int.TryParse(durationStr, out int duration);
+
+                                await DoKeypress(webSocket, avaKey, duration);
+                            }
                             break;
                         default:
                             await SendErrorMessage(webSocket, "Unsupported endpoint");
@@ -319,65 +328,21 @@ namespace Ryujinx.Ava
             }
         }
 
-        private async Task DoKeypress(WebSocket webSocket)
+        private async Task DoKeypress(WebSocket webSocket, Key avaKey, int duration)
         {
-            var buffer = new ArraySegment<byte>(new byte[2048]);
-            WebSocketReceiveResult result = await webSocket.ReceiveAsync(
-                buffer,
+            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
+            await Task.Delay(duration);
+            (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
+
+            // Send response back to client
+            string responseMessage = "Status: OK";
+            byte[] responseBuffer = Encoding.UTF8.GetBytes(responseMessage);
+            await webSocket.SendAsync(
+                new ArraySegment<byte>(responseBuffer),
+                WebSocketMessageType.Text,
+                true,
                 CancellationToken.None
             );
-
-            if (!result.EndOfMessage)
-            {
-                // Handle cases where the entire message is not received in one frame.
-                return;
-            }
-
-            if (buffer.Array != null) // Check if the buffer array is not null
-            {
-                string message = Encoding.UTF8.GetString(buffer.Array, buffer.Offset, result.Count);
-                Dictionary<string, string> requestData;
-
-                requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(message);
-                if (requestData != null) // Check if requestData is not null
-                {
-                    Console.WriteLine($"Received data: {JsonConvert.SerializeObject(requestData)}");
-
-                    if (requestData.ContainsKey("action") && requestData["action"] == "keypress")
-                    {
-                        requestData.TryGetValue("key", out string key);
-                        Enum.TryParse<Key>(key, out Key avaKey);
-                        requestData.TryGetValue("duration", out string durationStr);
-                        int.TryParse(durationStr, out int duration);
-
-                        (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
-                        await Task.Delay(duration);
-                        (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
-
-                        // Send response back to client
-                        string responseMessage = "Status: OK";
-                        byte[] responseBuffer = Encoding.UTF8.GetBytes(responseMessage);
-                        await webSocket.SendAsync(
-                            new ArraySegment<byte>(responseBuffer),
-                            WebSocketMessageType.Text,
-                            true,
-                            CancellationToken.None
-                        );
-                    }
-                    else
-                    {
-                        await SendErrorMessage(webSocket, "Unsupported action");
-                    }
-                }
-                else
-                {
-                    await SendErrorMessage(webSocket, "Invalid JSON data");
-                }
-            }
-            else
-            {
-                await SendErrorMessage(webSocket, "Buffer is empty");
-            }
         }
 
         private async Task SendErrorMessage(WebSocket webSocket, string errorMessage)
