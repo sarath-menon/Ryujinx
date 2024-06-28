@@ -233,7 +233,7 @@ namespace Ryujinx.Ava
             _gpuDoneEvent = new ManualResetEvent(false);
         }
 
-        private async Task HandleStreamSocketConnection(HttpListenerContext context)
+        private async Task HandleWebSocketConnection(HttpListenerContext context)
         {
             if (context.Request.IsWebSocketRequest)
             {
@@ -247,48 +247,19 @@ namespace Ryujinx.Ava
                     {
                         while (webSocket != null && webSocket.State == WebSocketState.Open)
                         {
-                            await SendFrameAsWebSocket(webSocket);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine($"WebSocket error: {e.Message}");
-                }
-                finally
-                {
-                    if (webSocket != null && webSocket.State != WebSocketState.Closed)
-                    {
-                        await webSocket.CloseAsync(
-                            WebSocketCloseStatus.InternalServerError,
-                            "Error occurred",
-                            CancellationToken.None
-                        );
-                    }
-                }
-            }
-            else
-            {
-                context.Response.StatusCode = 400;
-                context.Response.Close();
-            }
-        }
-
-        private async Task HandleKeypressSocketConnection(HttpListenerContext context)
-        {
-            if (context.Request.IsWebSocketRequest)
-            {
-                WebSocket webSocket = null;
-                try
-                {
-                    var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
-                    webSocket = webSocketContext.WebSocket;
-
-                    if (webSocket != null) // Ensure the WebSocket is not null
-                    {
-                        while (webSocket != null && webSocket.State == WebSocketState.Open)
-                        {
-                            await HandleHttpRequest(webSocket);
+                            string endpointName = context.Request.RawUrl;
+                            switch (endpointName)
+                            {
+                                case "/stream_websocket":
+                                    await SendFrameAsWebSocket(webSocket);
+                                    break;
+                                case "/keypress_websocket":
+                                    await HandleHttpRequest(webSocket);
+                                    break;
+                                default:
+                                    Console.WriteLine("Unknown WebSocket endpoint");
+                                    break;
+                            }
                         }
                     }
                 }
@@ -447,15 +418,18 @@ namespace Ryujinx.Ava
                 {
                     if (request.Url.AbsolutePath == "/stream_websocket")
                     {
-                        await HandleStreamSocketConnection(context);
+                        Console.WriteLine("Streaming websocket task started");
+                        await HandleWebSocketConnection(context);
                     }
                     else if (request.Url.AbsolutePath == "/keypress_websocket")
                     {
-                        await HandleKeypressSocketConnection(context);
+                        Console.WriteLine("Keypress websocket task started");
+                        await HandleWebSocketConnection(context);
                     }
                     else
                     {
-                        throw new InvalidOperationException("Unsupported request type.");
+                        response.StatusCode = 404; // Not Found
+                        response.StatusDescription = "Not Found";
                     }
                 }
                 catch (Exception ex)
