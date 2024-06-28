@@ -236,6 +236,55 @@ namespace Ryujinx.Ava
             _gpuDoneEvent = new ManualResetEvent(false);
         }
 
+        // private async Task HandleWebSocketConnection(HttpListenerContext context)
+        // {
+        //     if (context.Request.IsWebSocketRequest)
+        //     {
+        //         WebSocket webSocket = null;
+        //         try
+        //         {
+        //             var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
+        //             webSocket = webSocketContext.WebSocket;
+
+        //             while (webSocket != null && webSocket.State == WebSocketState.Open)
+        //             {
+        //                 string endpointName = context.Request.RawUrl;
+        //                 switch (endpointName)
+        //                 {
+        //                     case "/stream_websocket":
+        //                         await SendFrameAsWebSocket(webSocket);
+        //                         break;
+        //                     case "/keypress_websocket":
+        //                         await DoKeypress(webSocket);
+        //                         break;
+        //                     default:
+        //                         break;
+        //                 }
+        //             }
+        //         }
+        //         catch (Exception e)
+        //         {
+        //             Console.WriteLine($"WebSocket error: {e.Message}");
+        //         }
+        //         finally
+        //         {
+        //             if (webSocket != null && webSocket.State != WebSocketState.Closed)
+        //             {
+        //                 await webSocket.CloseAsync(
+        //                     WebSocketCloseStatus.InternalServerError,
+        //                     "Error occurred",
+        //                     CancellationToken.None
+        //                 );
+        //             }
+        //         }
+        //     }
+        //     else
+        //     {
+        //         context.Response.StatusCode = 400;
+        //         context.Response.Close();
+        //     }
+        // }
+
         private async Task HandleWebSocketConnection(HttpListenerContext context)
         {
             if (context.Request.IsWebSocketRequest)
@@ -248,17 +297,40 @@ namespace Ryujinx.Ava
 
                     while (webSocket != null && webSocket.State == WebSocketState.Open)
                     {
-                        string endpointName = context.Request.RawUrl;
-                        switch (endpointName)
+                        var buffer = new ArraySegment<byte>(new byte[2048]);
+                        WebSocketReceiveResult result = await webSocket.ReceiveAsync(
+                            buffer,
+                            CancellationToken.None
+                        );
+
+                        if (!result.EndOfMessage)
                         {
-                            case "/stream_websocket":
-                                await SendFrameAsWebSocket(webSocket);
-                                break;
-                            case "/keypress_websocket":
-                                await DoKeypress(webSocket);
-                                break;
-                            default:
-                                break;
+                            // Handle cases where the entire message is not received in one frame.
+                            continue;
+                        }
+
+                        if (buffer.Array != null) // Check if the buffer array is not null
+                        {
+                            string message = Encoding.UTF8.GetString(
+                                buffer.Array,
+                                buffer.Offset,
+                                result.Count
+                            );
+                            Dictionary<string, string> requestData = JsonConvert.DeserializeObject<
+                                Dictionary<string, string>
+                            >(message);
+                            if (requestData != null) // Check if requestData is not null
+                            {
+                                if (
+                                    requestData.ContainsKey("action")
+                                    && requestData["action"] == "request_frames"
+                                )
+                                {
+                                    requestData.TryGetValue("count", out string countStr);
+                                    int frameCount = int.Parse(countStr ?? "1"); // Default to 1 frame if not specified
+                                    await SendFrameAsWebSocket(webSocket, frameCount);
+                                }
+                            }
                         }
                     }
                 }
@@ -357,27 +429,35 @@ namespace Ryujinx.Ava
             );
         }
 
-        private async Task SendFrameAsWebSocket(WebSocket webSocket)
+        private async Task SendFrameAsWebSocket(WebSocket webSocket, int frameCount)
         {
-            byte[] frameData;
-            lock (_imageLock)
+            for (int i = 0; i < frameCount; i++)
             {
-                if (_imageByte != null)
+                byte[] frameData;
+                lock (_imageLock)
                 {
-                    frameData = _imageByte;
+                    if (_imageByte != null)
+                    {
+                        frameData = _imageByte;
+                    }
+                    else
+                    {
+                        frameData = Encoding.UTF8.GetBytes("No frame available");
+                    }
                 }
-                else
+
+                await webSocket.SendAsync(
+                    new ArraySegment<byte>(frameData),
+                    WebSocketMessageType.Binary,
+                    endOfMessage: true,
+                    CancellationToken.None
+                );
+
+                if (i < frameCount - 1) // Wait for a short interval before sending the next frame
                 {
-                    frameData = Encoding.UTF8.GetBytes("No frame available");
+                    await Task.Delay(1); // Delay can be adjusted or made configurable
                 }
             }
-
-            await webSocket.SendAsync(
-                new ArraySegment<byte>(frameData),
-                WebSocketMessageType.Binary,
-                endOfMessage: true,
-                CancellationToken.None
-            );
         }
 
         private async Task HandlePostRequest(HttpListenerRequest request)
