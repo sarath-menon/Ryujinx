@@ -255,7 +255,7 @@ namespace Ryujinx.Ava
                                     Console.WriteLine("Streaming websocket task started");
                                     break;
                                 case "/keypress_websocket":
-                                    await HandleHttpRequest(webSocket);
+                                    await DoKeypress(webSocket);
                                     Console.WriteLine("Keypress websocket task started");
                                     break;
                                 default:
@@ -288,7 +288,7 @@ namespace Ryujinx.Ava
             }
         }
 
-        private async Task HandleHttpRequest(WebSocket webSocket)
+        private async Task DoKeypress(WebSocket webSocket)
         {
             var buffer = new ArraySegment<byte>(new byte[2048]);
             WebSocketReceiveResult result = await webSocket.ReceiveAsync(
@@ -383,6 +383,28 @@ namespace Ryujinx.Ava
             );
         }
 
+        private async Task HandleGetRequest(HttpListenerRequest request)
+        {
+            try
+            {
+                switch (request.Url.AbsolutePath)
+                {
+                    case "/resume_game":
+                        Console.WriteLine("Pause game");
+                        Resume();
+                        break;
+                    case "/pause_game":
+                        Console.WriteLine("Pause game");
+                        Pause();
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error handling game action: " + ex.Message);
+            }
+        }
+
         // Update the method where the Timer is instantiated
         private void StartHttpServer()
         {
@@ -421,6 +443,10 @@ namespace Ryujinx.Ava
                     if (request.IsWebSocketRequest)
                     {
                         await HandleWebSocketConnection(context);
+                    }
+                    else if (request.HttpMethod == "GET")
+                    {
+                        await HandleGetRequest(request);
                     }
                     else
                     {
