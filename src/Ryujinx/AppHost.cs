@@ -424,7 +424,7 @@ namespace Ryujinx.Ava
 
             try
             {
-                context = listener.EndGetContext(result);
+                context = await Task.Run(() => listener.EndGetContext(result));
             }
             catch (Exception ex) // Now using the exception variable
             {
