@@ -383,19 +383,19 @@ namespace Ryujinx.Ava
             );
         }
 
-        private async Task HandleGetRequest(HttpListenerRequest request)
+        private async Task HandlePostRequest(HttpListenerRequest request)
         {
             try
             {
                 switch (request.Url.AbsolutePath)
                 {
                     case "/resume_game":
-                        Console.WriteLine("Pause game");
-                        Resume();
+                        Console.WriteLine("Resume game");
+                        await Task.Run(() => Resume()); // Ensure method is properly awaited if it's async
                         break;
                     case "/pause_game":
                         Console.WriteLine("Pause game");
-                        Pause();
+                        await Task.Run(() => Pause()); // Ensure method is properly awaited if it's async
                         break;
                 }
             }
@@ -426,9 +426,9 @@ namespace Ryujinx.Ava
             {
                 context = listener.EndGetContext(result);
             }
-            catch (Exception ex)
+            catch (Exception ex) // Now using the exception variable
             {
-                // Log exception or handle listener shutdown
+                Console.WriteLine("Listener exception: " + ex.Message);
                 return;
             }
 
@@ -444,9 +444,9 @@ namespace Ryujinx.Ava
                     {
                         await HandleWebSocketConnection(context);
                     }
-                    else if (request.HttpMethod == "GET")
+                    else if (request.HttpMethod == "POST")
                     {
-                        await HandleGetRequest(request);
+                        await HandlePostRequest(request);
                     }
                     else
                     {
@@ -454,9 +454,9 @@ namespace Ryujinx.Ava
                         response.StatusDescription = "Not Found";
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) // Now using the exception variable
                 {
-                    // Handle errors (e.g., client disconnected, etc.)
+                    Console.WriteLine("Error processing request: " + ex.Message);
                 }
                 finally
                 {
