@@ -237,32 +237,47 @@ namespace Ryujinx.Ava
         {
             if (context.Request.IsWebSocketRequest)
             {
-                HttpListenerWebSocketContext wsContext = null;
+                WebSocket webSocket = null;
                 try
                 {
-                    wsContext = await context.AcceptWebSocketAsync(subProtocol: null);
-                    WebSocket webSocket = wsContext.WebSocket;
+                    var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
+                    webSocket = webSocketContext.WebSocket;
 
-                    // // Parse the endpoint name from the URL
-                    // string endpointName = context.Request.Url.AbsolutePath;
-
-                    while (webSocket.State == WebSocketState.Open)
+                    if (webSocket != null) // Ensure the WebSocket is not null
                     {
-                        await SendFrameAsWebSocket(webSocket);
+                        Task receiveTask = Task.Run(async () =>
+                        {
+                            while (webSocket != null && webSocket.State == WebSocketState.Open)
+                            {
+                                await HandleHttpRequest(webSocket);
+                            }
+                        });
+
+                        Task sendTask = Task.Run(async () =>
+                        {
+                            while (webSocket != null && webSocket.State == WebSocketState.Open)
+                            {
+                                await SendFrameAsWebSocket(webSocket);
+                            }
+                        });
+
+                        await Task.WhenAll(receiveTask, sendTask);
                     }
                 }
                 catch (Exception e)
                 {
-                    // Log or handle the exception as needed
                     Console.WriteLine($"WebSocket error: {e.Message}");
                 }
                 finally
                 {
-                    wsContext?.WebSocket?.CloseAsync(
-                        WebSocketCloseStatus.NormalClosure,
-                        "Closing",
-                        CancellationToken.None
-                    );
+                    if (webSocket != null && webSocket.State != WebSocketState.Closed)
+                    {
+                        await webSocket.CloseAsync(
+                            WebSocketCloseStatus.InternalServerError,
+                            "Error occurred",
+                            CancellationToken.None
+                        );
+                    }
                 }
             }
             else
@@ -270,6 +285,78 @@ namespace Ryujinx.Ava
                 context.Response.StatusCode = 400;
                 context.Response.Close();
             }
+        }
+
+        private async Task HandleHttpRequest(WebSocket webSocket)
+        {
+            var buffer = new ArraySegment<byte>(new byte[2048]);
+            WebSocketReceiveResult result = await webSocket.ReceiveAsync(
+                buffer,
+                CancellationToken.None
+            );
+
+            if (!result.EndOfMessage)
+            {
+                // Handle cases where the entire message is not received in one frame.
+                return;
+            }
+
+            if (buffer.Array != null) // Check if the buffer array is not null
+            {
+                string message = Encoding.UTF8.GetString(buffer.Array, buffer.Offset, result.Count);
+                Dictionary<string, string> requestData;
+
+                requestData = JsonConvert.DeserializeObject<Dictionary<string, string>>(message);
+                if (requestData != null) // Check if requestData is not null
+                {
+                    Console.WriteLine($"Received data: {JsonConvert.SerializeObject(requestData)}");
+
+                    if (requestData.ContainsKey("action") && requestData["action"] == "keypress")
+                    {
+                        requestData.TryGetValue("key", out string key);
+                        Enum.TryParse<Key>(key, out Key avaKey);
+                        requestData.TryGetValue("duration", out string durationStr);
+                        int.TryParse(durationStr, out int duration);
+
+                        (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(avaKey);
+                        await Task.Delay(duration);
+                        (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyRelease(avaKey);
+
+                        // Send response back to client
+                        string responseMessage = "Status: OK";
+                        byte[] responseBuffer = Encoding.UTF8.GetBytes(responseMessage);
+                        await webSocket.SendAsync(
+                            new ArraySegment<byte>(responseBuffer),
+                            WebSocketMessageType.Text,
+                            true,
+                            CancellationToken.None
+                        );
+                    }
+                    else
+                    {
+                        await SendErrorMessage(webSocket, "Unsupported action");
+                    }
+                }
+                else
+                {
+                    await SendErrorMessage(webSocket, "Invalid JSON data");
+                }
+            }
+            else
+            {
+                await SendErrorMessage(webSocket, "Buffer is empty");
+            }
+        }
+
+        private async Task SendErrorMessage(WebSocket webSocket, string errorMessage)
+        {
+            byte[] errorBuffer = Encoding.UTF8.GetBytes(errorMessage);
+            await webSocket.SendAsync(
+                new ArraySegment<byte>(errorBuffer),
+                WebSocketMessageType.Text,
+                true,
+                CancellationToken.None
+            );
         }
 
         private async Task SendFrameAsWebSocket(WebSocket webSocket)
