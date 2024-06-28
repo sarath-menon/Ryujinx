@@ -252,9 +252,11 @@ namespace Ryujinx.Ava
                             {
                                 case "/stream_websocket":
                                     await SendFrameAsWebSocket(webSocket);
+                                    Console.WriteLine("Streaming websocket task started");
                                     break;
                                 case "/keypress_websocket":
                                     await HandleHttpRequest(webSocket);
+                                    Console.WriteLine("Keypress websocket task started");
                                     break;
                                 default:
                                     Console.WriteLine("Unknown WebSocket endpoint");
@@ -416,14 +418,8 @@ namespace Ryujinx.Ava
 
                 try
                 {
-                    if (request.Url.AbsolutePath == "/stream_websocket")
+                    if (request.IsWebSocketRequest)
                     {
-                        Console.WriteLine("Streaming websocket task started");
-                        await HandleWebSocketConnection(context);
-                    }
-                    else if (request.Url.AbsolutePath == "/keypress_websocket")
-                    {
-                        Console.WriteLine("Keypress websocket task started");
                         await HandleWebSocketConnection(context);
                     }
                     else
