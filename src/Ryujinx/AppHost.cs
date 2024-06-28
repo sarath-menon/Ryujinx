@@ -50,6 +50,8 @@ using Ryujinx.UI.App.Common;
 using Ryujinx.UI.Common;
 using Ryujinx.UI.Common.Configuration;
 using Ryujinx.UI.Common.Helper;
+using SharpHook;
+using SharpHook.Native;
 using Silk.NET.Vulkan;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Jpeg;
@@ -74,6 +76,7 @@ namespace Ryujinx.Ava
     {
         // for http server
         private HttpListener _httpListener;
+        private EventSimulator _eventSimulator = new EventSimulator();
 
         // private System.Timers.Timer _messageTimer;
         private byte[] _imageByte;
@@ -390,6 +393,11 @@ namespace Ryujinx.Ava
                     case "/pause_game":
                         Console.WriteLine("Pause game");
                         await Task.Run(() => Pause()); // Ensure method is properly awaited if it's async
+                        break;
+                    case "/mouse_press":
+                        Console.WriteLine("Mouse press");
+                        // Move the mouse pointer to (0, 0)
+                        _eventSimulator.SimulateMouseMovement(500, 500);
                         break;
                 }
             }
