@@ -320,9 +320,22 @@ namespace Ryujinx.Ava
                         ? tempDuration
                         : 1000;
                     int fps = int.TryParse(requestData["fps"], out int tempFps) ? tempFps : 10;
+                    bool isScreenshot = false;
+                    isScreenshot =
+                        requestData.TryGetValue("screenshot", out string screenshot)
+                        && screenshot.Equals("True", StringComparison.OrdinalIgnoreCase);
 
-                    await SendFrameAsWebSocket(webSocket, duration, fps);
+                    if (isScreenshot)
+                    {
+                        await HandleScreenshot(webSocket);
+                        break;
+                    }
+                    else
+                    {
+                        await HandleWebsocketStream(webSocket, duration, fps);
+                    }
                     break;
+
                 case "/keypress_websocket":
                     requestData.TryGetValue("key", out string key);
                     requestData.TryGetValue("duration", out string durationStr);
@@ -334,6 +347,7 @@ namespace Ryujinx.Ava
 
                     await DoKeypress(webSocket, parsedKey, parsedDuration);
                     break;
+
                 default:
                     await SendErrorMessage(webSocket, "Unsupported endpoint");
                     break;
@@ -386,7 +400,7 @@ namespace Ryujinx.Ava
             );
         }
 
-        private async Task SendFrameAsWebSocket(WebSocket webSocket, int duration_ms, int fps)
+        private async Task HandleWebsocketStream(WebSocket webSocket, int duration_ms, int fps)
         {
             byte[] frameData;
             int frameCount = duration_ms * fps / 1000;
@@ -394,17 +408,7 @@ namespace Ryujinx.Ava
 
             for (int i = 0; i < frameCount; i++)
             {
-                lock (_imageLock)
-                {
-                    frameData = _imageByte ?? Encoding.UTF8.GetBytes("No frame available");
-                }
-
-                await webSocket.SendAsync(
-                    new ArraySegment<byte>(frameData),
-                    WebSocketMessageType.Binary,
-                    endOfMessage: true,
-                    CancellationToken.None
-                );
+                frameData = await SendFrameAsync(webSocket);
 
                 // don't add delay on the last frame
                 if (i < frameCount - 1)
@@ -412,6 +416,28 @@ namespace Ryujinx.Ava
                     await Task.Delay(frameDelay);
                 }
             }
+        }
+
+        private async Task HandleScreenshot(WebSocket websocket)
+        {
+            byte[] frameData = await SendFrameAsync(websocket);
+        }
+
+        private async Task<byte[]> SendFrameAsync(WebSocket websocket)
+        {
+            byte[] frameData;
+            lock (_imageLock)
+            {
+                frameData = _imageByte ?? Encoding.UTF8.GetBytes("No frame available");
+            }
+
+            await websocket.SendAsync(
+                new ArraySegment<byte>(frameData),
+                WebSocketMessageType.Binary,
+                true,
+                CancellationToken.None
+            );
+            return frameData;
         }
 
         private async Task HandlePostRequest(HttpListenerRequest request)
