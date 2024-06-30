@@ -265,10 +265,7 @@ namespace Ryujinx.Ava
                         CancellationToken.None
                     );
 
-                    // safety checks
-                    if (!result.EndOfMessage)
-                        continue;
-                    if (buffer.Array == null)
+                    if (!result.EndOfMessage || buffer.Array == null)
                         continue;
 
                     // deserialize the message
@@ -283,38 +280,7 @@ namespace Ryujinx.Ava
                     if (requestData == null)
                         continue;
 
-                    string endpointName = context.Request.RawUrl;
-                    switch (endpointName)
-                    {
-                        case "/stream_websocket":
-                            if (
-                                requestData.TryGetValue("action", out string action)
-                                && action == "request_frames"
-                            )
-                            {
-                                // get the number of frames to send (if not set, default to 1)
-                                int frameCount = int.TryParse(requestData["count"], out int count)
-                                    ? count
-                                    : 1;
-                                await SendFrameAsWebSocket(webSocket, frameCount);
-                            }
-                            break;
-                        case "/keypress_websocket":
-                            if (
-                                requestData.TryGetValue("key", out string key)
-                                && requestData.TryGetValue("duration", out string durationStr)
-                            )
-                            {
-                                Enum.TryParse<Key>(key, out Key avaKey);
-                                int.TryParse(durationStr, out int duration);
-
-                                await DoKeypress(webSocket, avaKey, duration);
-                            }
-                            break;
-                        default:
-                            await SendErrorMessage(webSocket, "Unsupported endpoint");
-                            break;
-                    }
+                    await ProcessWebSocketRequest(context, webSocket, requestData);
                 }
             }
             catch (Exception e)
@@ -332,6 +298,44 @@ namespace Ryujinx.Ava
                     );
                 }
                 _openWebSockets.Remove(webSocket); // Remove from tracking list
+            }
+        }
+
+        private async Task ProcessWebSocketRequest(
+            HttpListenerContext context,
+            WebSocket webSocket,
+            Dictionary<string, string> requestData
+        )
+        {
+            string endpointName = context.Request.RawUrl;
+            switch (endpointName)
+            {
+                case "/stream_websocket":
+                    if (
+                        requestData.TryGetValue("action", out string action)
+                        && action == "request_frames"
+                    )
+                    {
+                        int frameCount = int.TryParse(requestData["count"], out int count)
+                            ? count
+                            : 1;
+                        await SendFrameAsWebSocket(webSocket, frameCount);
+                    }
+                    break;
+                case "/keypress_websocket":
+                    if (
+                        requestData.TryGetValue("key", out string key)
+                        && requestData.TryGetValue("duration", out string durationStr)
+                    )
+                    {
+                        Enum.TryParse<Key>(key, out Key avaKey);
+                        int.TryParse(durationStr, out int duration);
+                        await DoKeypress(webSocket, avaKey, duration);
+                    }
+                    break;
+                default:
+                    await SendErrorMessage(webSocket, "Unsupported endpoint");
+                    break;
             }
         }
 
