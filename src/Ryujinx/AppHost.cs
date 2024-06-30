@@ -310,34 +310,29 @@ namespace Ryujinx.Ava
             Dictionary<string, string> requestData
         )
         {
-            // Log the new WebSocket connection
             Console.WriteLine($"New WebSocket connection: {context.Request.RawUrl}");
 
             string endpointName = context.Request.RawUrl;
             switch (endpointName)
             {
                 case "/stream_websocket":
-                    if (
-                        requestData.TryGetValue("action", out string action)
-                        && action == "request_frames"
-                    )
-                    {
-                        int frameCount = int.TryParse(requestData["count"], out int count)
-                            ? count
-                            : 1;
-                        await SendFrameAsWebSocket(webSocket, frameCount);
-                    }
+                    int duration = int.TryParse(requestData["duration"], out int tempDuration)
+                        ? tempDuration
+                        : 1000;
+                    int fps = int.TryParse(requestData["fps"], out int tempFps) ? tempFps : 10;
+
+                    await SendFrameAsWebSocket(webSocket, duration, fps);
                     break;
                 case "/keypress_websocket":
-                    if (
-                        requestData.TryGetValue("key", out string key)
-                        && requestData.TryGetValue("duration", out string durationStr)
-                    )
-                    {
-                        Enum.TryParse<Key>(key, out Key avaKey);
-                        int.TryParse(durationStr, out int duration);
-                        await DoKeypress(webSocket, avaKey, duration);
-                    }
+                    requestData.TryGetValue("key", out string key);
+                    requestData.TryGetValue("duration", out string durationStr);
+
+                    Enum.TryParse<Key>(key, out Key parsedKey);
+                    int parsedDuration = int.TryParse(durationStr, out int tempParsedDuration)
+                        ? tempParsedDuration
+                        : 1000;
+
+                    await DoKeypress(webSocket, parsedKey, parsedDuration);
                     break;
                 default:
                     await SendErrorMessage(webSocket, "Unsupported endpoint");
@@ -391,9 +386,12 @@ namespace Ryujinx.Ava
             );
         }
 
-        private async Task SendFrameAsWebSocket(WebSocket webSocket, int frameCount)
+        private async Task SendFrameAsWebSocket(WebSocket webSocket, int duration_ms, int fps)
         {
             byte[] frameData;
+            int frameCount = duration_ms * fps / 1000;
+            int frameDelay = 1000 / fps; // in milliseconds
+
             for (int i = 0; i < frameCount; i++)
             {
                 lock (_imageLock)
@@ -408,9 +406,10 @@ namespace Ryujinx.Ava
                     CancellationToken.None
                 );
 
+                // don't add delay on the last frame
                 if (i < frameCount - 1)
                 {
-                    await Task.Delay(1); // Wait for a short interval before sending the next frame
+                    await Task.Delay(frameDelay);
                 }
             }
         }
