@@ -298,6 +298,9 @@ namespace Ryujinx.Ava
                     );
                 }
                 _openWebSockets.Remove(webSocket); // Remove from tracking list
+
+                // Log the WebSocket closure
+                Console.WriteLine($"WebSocket connection closed: {context.Request.RawUrl}");
             }
         }
 
@@ -307,6 +310,9 @@ namespace Ryujinx.Ava
             Dictionary<string, string> requestData
         )
         {
+            // Log the new WebSocket connection
+            Console.WriteLine($"New WebSocket connection: {context.Request.RawUrl}");
+
             string endpointName = context.Request.RawUrl;
             switch (endpointName)
             {
@@ -354,7 +360,7 @@ namespace Ryujinx.Ava
                     )
                     .Wait();
             }
-            _openWebSockets.Clear();
+            _openWebSockets.Clear(); // Clear the list of open WebSockets
         }
 
         private async Task DoKeypress(WebSocket webSocket, Key avaKey, int duration)
@@ -387,19 +393,12 @@ namespace Ryujinx.Ava
 
         private async Task SendFrameAsWebSocket(WebSocket webSocket, int frameCount)
         {
+            byte[] frameData;
             for (int i = 0; i < frameCount; i++)
             {
-                byte[] frameData;
                 lock (_imageLock)
                 {
-                    if (_imageByte != null)
-                    {
-                        frameData = _imageByte;
-                    }
-                    else
-                    {
-                        frameData = Encoding.UTF8.GetBytes("No frame available");
-                    }
+                    frameData = _imageByte ?? Encoding.UTF8.GetBytes("No frame available");
                 }
 
                 await webSocket.SendAsync(
@@ -409,9 +408,9 @@ namespace Ryujinx.Ava
                     CancellationToken.None
                 );
 
-                if (i < frameCount - 1) // Wait for a short interval before sending the next frame
+                if (i < frameCount - 1)
                 {
-                    await Task.Delay(1);
+                    await Task.Delay(1); // Wait for a short interval before sending the next frame
                 }
             }
         }
