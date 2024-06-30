@@ -76,6 +76,11 @@ namespace Ryujinx.Ava
     {
         // for http server
         private HttpListener _httpListener;
+
+        // Add a list to track all open WebSockets
+        private List<WebSocket> _openWebSockets = new List<WebSocket>();
+
+        // for simulating mouse events
         private EventSimulator _eventSimulator = new EventSimulator();
 
         // private System.Timers.Timer _messageTimer;
@@ -250,6 +255,7 @@ namespace Ryujinx.Ava
             {
                 var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
                 webSocket = webSocketContext.WebSocket;
+                _openWebSockets.Add(webSocket); // Track the WebSocket
 
                 var buffer = new ArraySegment<byte>(new byte[2048]);
                 while (webSocket != null && webSocket.State == WebSocketState.Open)
@@ -325,7 +331,26 @@ namespace Ryujinx.Ava
                         CancellationToken.None
                     );
                 }
+                _openWebSockets.Remove(webSocket); // Remove from tracking list
             }
+        }
+
+        public void CloseAllWebSockets()
+        {
+            foreach (var webSocket in _openWebSockets)
+            {
+                if (webSocket.State == WebSocketState.Open)
+                {
+                    webSocket
+                        .CloseAsync(
+                            WebSocketCloseStatus.NormalClosure,
+                            "Closing",
+                            CancellationToken.None
+                        )
+                        .Wait();
+                }
+            }
+            _openWebSockets.Clear();
         }
 
         private async Task DoKeypress(WebSocket webSocket, Key avaKey, int duration)
@@ -940,11 +965,8 @@ namespace Ryujinx.Ava
                 _httpListener.Stop();
                 _httpListener.Close();
             }
-            // if (_messageTimer != null)
-            // {
-            //     _messageTimer.Stop();
-            //     _messageTimer.Dispose();
-            // }
+
+            CloseAllWebSockets();
         }
 
         public void DisposeGpu()
