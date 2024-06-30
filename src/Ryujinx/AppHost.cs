@@ -343,16 +343,16 @@ namespace Ryujinx.Ava
         {
             foreach (var webSocket in _openWebSockets)
             {
-                if (webSocket.State == WebSocketState.Open)
-                {
-                    webSocket
-                        .CloseAsync(
-                            WebSocketCloseStatus.NormalClosure,
-                            "Closing",
-                            CancellationToken.None
-                        )
-                        .Wait();
-                }
+                if (webSocket.State != WebSocketState.Open)
+                    continue;
+
+                webSocket
+                    .CloseAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "Closing",
+                        CancellationToken.None
+                    )
+                    .Wait();
             }
             _openWebSockets.Clear();
         }
