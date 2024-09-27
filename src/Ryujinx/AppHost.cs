@@ -440,6 +440,21 @@ namespace Ryujinx.Ava
             return frameData;
         }
 
+        private void GetStreamInfo(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            int width = _image.Width;
+            int height = _image.Height;
+
+            // Set the status code to OK
+            response.StatusCode = (int)HttpStatusCode.OK;
+            response.StatusDescription = "OK";
+
+            // Optionally, you can add headers or other information here
+
+            // Close the response
+            response.Close();
+        }
+
         private async Task HandlePostRequest(HttpListenerRequest request)
         {
             try
@@ -458,6 +473,26 @@ namespace Ryujinx.Ava
                         Console.WriteLine("Mouse press");
                         // Move the mouse pointer to (0, 0)
                         _eventSimulator.SimulateMouseMovement(500, 500);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error handling game action: " + ex.Message);
+            }
+        }
+
+        private async Task HandleGetRequest(
+            HttpListenerRequest request,
+            HttpListenerResponse response
+        )
+        {
+            try
+            {
+                switch (request.Url.AbsolutePath)
+                {
+                    case "/stream_info":
+                        await Task.Run(() => GetStreamInfo(request, response));
                         break;
                 }
             }
@@ -505,6 +540,10 @@ namespace Ryujinx.Ava
                     if (request.IsWebSocketRequest)
                     {
                         await HandleWebSocketConnection(context);
+                    }
+                    else if (request.HttpMethod == "GET")
+                    {
+                        await HandleGetRequest(request, response);
                     }
                     else if (request.HttpMethod == "POST")
                     {
