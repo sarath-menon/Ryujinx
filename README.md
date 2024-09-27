@@ -168,3 +168,19 @@ See [LICENSE.txt](LICENSE.txt) and [THIRDPARTY.md](distribution/legal/THIRDPARTY
 - [AmiiboAPI](https://www.amiiboapi.com) is used in our Amiibo emulation.
 - [ldn_mitm](https://github.com/spacemeowx2/ldn_mitm) is used for one of our available multiplayer modes.
 - [ShellLink](https://github.com/securifybv/ShellLink) is used for Windows shortcut generation.
+
+# Custom instructions 
+
+## Normal mode
+
+```
+./build/Ryujinx
+```
+
+## Headless mode
+
+```
+./build/Ryujinx.Headless.SDL2 --graphics-backend=Vulkan --enable-mouse --hide-cursor=Never '/Users/sarathmenon/Documents/switch_games/Captain Toad Treasure Tracker [01009BF0072D4000][v0].nsp'
+```
+1. --enable-mouse enables emulated mouse and disables system cursor
+2. --hide-cursor=Never disables cursor hiding
