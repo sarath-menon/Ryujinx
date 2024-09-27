@@ -37,6 +37,9 @@ using System.Threading;
 using ConfigGamepadInputId = Ryujinx.Common.Configuration.Hid.Controller.GamepadInputId;
 using ConfigStickInputId = Ryujinx.Common.Configuration.Hid.Controller.StickInputId;
 using Key = Ryujinx.Common.Configuration.Hid.Key;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace Ryujinx.Headless.SDL2
 {
@@ -56,6 +59,9 @@ namespace Ryujinx.Headless.SDL2
         private static List<InputConfig> _inputConfiguration;
         private static bool _enableKeyboard;
         private static bool _enableMouse;
+        private static Timer _screenshotTimer;
+        private static int _screenshotCounter = 0;
+        private static string _screenshotDirectory;
 
         private static readonly InputConfigJsonSerializerContext _serializerContext = new(JsonHelper.GetDefaultSerializerOptions());
 
@@ -457,6 +463,11 @@ namespace Ryujinx.Headless.SDL2
             GraphicsConfig.ShadersDumpPath = option.GraphicsShadersDumpPath;
             GraphicsConfig.EnableMacroHLE = !option.DisableMacroHLE;
 
+
+
+            _screenshotDirectory = Directory.GetCurrentDirectory() + "/screenshots";
+            Directory.CreateDirectory(_screenshotDirectory);
+
             while (true)
             {
                 LoadApplication(option);
@@ -724,9 +735,60 @@ namespace Ryujinx.Headless.SDL2
             }
 
             SetupProgressHandler();
+            SetupScreenshotCapture();
             ExecutionEntrypoint();
 
             return true;
+        }
+
+        private static void SetupScreenshotCapture()
+        {
+            // Set up the screenshot timer
+            _screenshotTimer = new Timer(CaptureScreenshot, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+
+            // Subscribe to the ScreenCaptured event
+            _emulationContext.Gpu.Renderer.ScreenCaptured += OnScreenCaptured;
+
+            Logger.Info?.Print(LogClass.Application, $"Screenshots will be saved to: {_screenshotDirectory}");
+        }
+
+        private static void CaptureScreenshot(object state)
+        {
+            if (_emulationContext.Gpu.Renderer == null)
+            {
+                return;
+            }
+
+            try
+            {
+                // Trigger the screenshot capture
+                _emulationContext.Gpu.Renderer.Screenshot();
+
+                Logger.Info?.Print(LogClass.Application, $"Screenshot capture triggered. Counter: {_screenshotCounter++}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error?.Print(LogClass.Application, $"Failed to capture screenshot: {ex.Message}");
+            }
+        }
+
+        private static void OnScreenCaptured(object sender, ScreenCaptureImageInfo e)
+        {
+            string filename = Path.Combine(_screenshotDirectory, $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss}.png");
+
+            try
+            {
+                using (SixLabors.ImageSharp.Image<Rgba32> image = SixLabors.ImageSharp.Image.LoadPixelData<Rgba32>(e.Data, e.Width, e.Height))
+                {
+                    image.Save(filename);
+                }
+
+                Logger.Info?.Print(LogClass.Application, $"Screenshot saved: {filename}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error?.Print(LogClass.Application, $"Failed to save screenshot: {ex.Message}");
+            }
         }
     }
 }
