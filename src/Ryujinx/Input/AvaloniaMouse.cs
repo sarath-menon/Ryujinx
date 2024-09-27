@@ -79,21 +79,6 @@ namespace Ryujinx.Ava.Input
             throw new NotImplementedException();
         }
 
-        public void EmulateMousePressed(MouseButton button)
-        {
-            _driver.EmulateMousePressed(button);
-        }
-
-        // public void EmulateMouseReleased(MouseButton button)
-        // {
-        //     _driver.EmulateMouseReleased(button);
-        // }
-
-        public void SetPosition(double x, double y)
-        {
-            _driver.SetPosition(x, y);
-        }
-
         public void Dispose()
         {
             _driver = null;
