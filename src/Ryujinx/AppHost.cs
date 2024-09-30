@@ -255,7 +255,12 @@ namespace Ryujinx.Ava
             {
                 var webSocketContext = await context.AcceptWebSocketAsync(subProtocol: null);
                 webSocket = webSocketContext.WebSocket;
+
+                Console.WriteLine($"New WebSocket connection: {context.Request.RawUrl}");
                 _openWebSockets.Add(webSocket); // Track the WebSocket
+
+                // Add this line to print the number of active WebSockets
+                Console.WriteLine($"Number of active WebSocket connections: {_openWebSockets.Count}");
 
                 var buffer = new ArraySegment<byte>(new byte[2048]);
                 while (webSocket != null && webSocket.State == WebSocketState.Open)
@@ -299,8 +304,9 @@ namespace Ryujinx.Ava
                 }
                 _openWebSockets.Remove(webSocket); // Remove from tracking list
 
-                // Log the WebSocket closure
+                // Log the WebSocket closure and the number of remaining active connections
                 Console.WriteLine($"WebSocket connection closed: {context.Request.RawUrl}");
+                Console.WriteLine($"Number of active WebSocket connections: {_openWebSockets.Count}");
             }
         }
 
@@ -310,7 +316,7 @@ namespace Ryujinx.Ava
             Dictionary<string, string> requestData
         )
         {
-            Console.WriteLine($"New WebSocket connection: {context.Request.RawUrl}");
+            Console.WriteLine($"New WebSocket request: {context.Request.RawUrl}");
 
             string endpointName = context.Request.RawUrl;
             switch (endpointName)
@@ -1226,72 +1232,72 @@ namespace Ryujinx.Ava
                 switch (Path.GetExtension(ApplicationPath).ToLowerInvariant())
                 {
                     case ".xci":
-                    {
-                        Logger.Info?.Print(LogClass.Application, "Loading as XCI.");
-
-                        if (!Device.LoadXci(ApplicationPath))
                         {
-                            Device.Dispose();
+                            Logger.Info?.Print(LogClass.Application, "Loading as XCI.");
 
-                            return false;
-                        }
-
-                        break;
-                    }
-                    case ".nca":
-                    {
-                        Logger.Info?.Print(LogClass.Application, "Loading as NCA.");
-
-                        if (!Device.LoadNca(ApplicationPath))
-                        {
-                            Device.Dispose();
-
-                            return false;
-                        }
-
-                        break;
-                    }
-                    case ".nsp":
-                    case ".pfs0":
-                    {
-                        Logger.Info?.Print(LogClass.Application, "Loading as NSP.");
-
-                        if (!Device.LoadNsp(ApplicationPath))
-                        {
-                            Device.Dispose();
-
-                            return false;
-                        }
-
-                        break;
-                    }
-                    default:
-                    {
-                        Logger.Info?.Print(LogClass.Application, "Loading as homebrew.");
-
-                        try
-                        {
-                            if (!Device.LoadProgram(ApplicationPath))
+                            if (!Device.LoadXci(ApplicationPath))
                             {
                                 Device.Dispose();
 
                                 return false;
                             }
+
+                            break;
                         }
-                        catch (ArgumentOutOfRangeException)
+                    case ".nca":
                         {
-                            Logger.Error?.Print(
-                                LogClass.Application,
-                                "The specified file is not supported by Ryujinx."
-                            );
+                            Logger.Info?.Print(LogClass.Application, "Loading as NCA.");
 
-                            Device.Dispose();
+                            if (!Device.LoadNca(ApplicationPath))
+                            {
+                                Device.Dispose();
 
-                            return false;
+                                return false;
+                            }
+
+                            break;
                         }
+                    case ".nsp":
+                    case ".pfs0":
+                        {
+                            Logger.Info?.Print(LogClass.Application, "Loading as NSP.");
 
-                        break;
-                    }
+                            if (!Device.LoadNsp(ApplicationPath))
+                            {
+                                Device.Dispose();
+
+                                return false;
+                            }
+
+                            break;
+                        }
+                    default:
+                        {
+                            Logger.Info?.Print(LogClass.Application, "Loading as homebrew.");
+
+                            try
+                            {
+                                if (!Device.LoadProgram(ApplicationPath))
+                                {
+                                    Device.Dispose();
+
+                                    return false;
+                                }
+                            }
+                            catch (ArgumentOutOfRangeException)
+                            {
+                                Logger.Error?.Print(
+                                    LogClass.Application,
+                                    "The specified file is not supported by Ryujinx."
+                                );
+
+                                Device.Dispose();
+
+                                return false;
+                            }
+
+                            break;
+                        }
                 }
             }
             else
@@ -1520,7 +1526,6 @@ namespace Ryujinx.Ava
             int counter = 0;
             const int pauseAfterSteps = 20;
             // (_keyboardInterface as AvaloniaKeyboard)?.EmulateKeyPress(Key.W);
-            (_mouseInterface as AvaloniaMouse)?.EmulateMousePressed(MouseButton.Button1);
 
             while (_isActive)
             {
