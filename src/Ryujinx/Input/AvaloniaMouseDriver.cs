@@ -75,6 +75,8 @@ namespace Ryujinx.Ava.Input
             {
                 PressedButtons[button] = false;
             }
+
+            // Console.WriteLine($"Released button: {args.Pointer}, Timestamp: {args.Timestamp}");
         }
 
         private void Parent_PointerPressedEvent(object o, PointerPressedEventArgs args)
@@ -85,6 +87,8 @@ namespace Ryujinx.Ava.Input
             {
                 PressedButtons[button] = true;
             }
+
+            // Console.WriteLine($"Pressed button: {args.Pointer}, Timestamp: {args.Timestamp}");
         }
 
         private void Parent_PointerMovedEvent(object o, PointerEventArgs args)
