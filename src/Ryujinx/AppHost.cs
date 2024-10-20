@@ -448,17 +448,44 @@ namespace Ryujinx.Ava
 
         private void GetStreamInfo(HttpListenerRequest request, HttpListenerResponse response)
         {
-            int width = _image.Width;
-            int height = _image.Height;
+            try
+            {
+                int width = 0;
+                int height = 0;
 
-            // Set the status code to OK
-            response.StatusCode = (int)HttpStatusCode.OK;
-            response.StatusDescription = "OK";
+                lock (_imageLock)
+                {
+                    if (_image != null)
+                    {
+                        width = _image.Width;
+                        height = _image.Height;
+                    }
+                }
 
-            // Optionally, you can add headers or other information here
+                // Create a JSON object with width and height
+                string jsonResponse = JsonConvert.SerializeObject(new { width, height });
 
-            // Close the response
-            response.Close();
+                // Set the response headers
+                response.StatusCode = (int)HttpStatusCode.OK;
+                response.ContentType = "application/json";
+                response.ContentEncoding = Encoding.UTF8;
+
+                // Write the JSON response
+                using (var writer = new StreamWriter(response.OutputStream, Encoding.UTF8))
+                {
+                    writer.Write(jsonResponse);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in GetStreamInfo: {ex.Message}");
+                response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            }
+            finally
+            {
+                // Ensure the response is closed
+                response.Close();
+            }
         }
 
         private async Task HandlePostRequest(HttpListenerRequest request)
@@ -1033,13 +1060,14 @@ namespace Ryujinx.Ava
 
             _chrono.Stop();
 
+            CloseAllWebSockets();
+
             if (_httpListener != null)
             {
                 _httpListener.Stop();
                 _httpListener.Close();
             }
 
-            CloseAllWebSockets();
         }
 
         public void DisposeGpu()
