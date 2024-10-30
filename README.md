@@ -169,15 +169,21 @@ See [LICENSE.txt](LICENSE.txt) and [THIRDPARTY.md](distribution/legal/THIRDPARTY
 - [ldn_mitm](https://github.com/spacemeowx2/ldn_mitm) is used for one of our available multiplayer modes.
 - [ShellLink](https://github.com/securifybv/ShellLink) is used for Windows shortcut generation.
 
-# Custom instructions 
+# Instructions 
 
-## Normal mode
+## Build the project
+
+```
+dotnet build -c Release -o build
+```
+
+## Launch in normal mode
 
 ```
 ./build/Ryujinx
 ```
 
-## Headless mode
+## Launch in headless mode
 
 ```
 ./build/Ryujinx.Headless.SDL2 --graphics-backend=Vulkan --enable-mouse --hide-cursor=Never '/Users/sarathmenon/Documents/switch_games/Captain Toad Treasure Tracker [01009BF0072D4000][v0].nsp'
